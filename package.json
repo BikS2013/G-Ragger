@@ -1,11 +1,11 @@
 {
-  "name": "geminirag",
+  "name": "g-ragger",
   "version": "1.0.0",
   "description": "TypeScript CLI tool for workspace-based document management and semantic search using Gemini File Search API",
   "type": "module",
   "main": "dist/cli.js",
   "bin": {
-    "geminirag": "dist/cli.js"
+    "g-ragger": "dist/cli.js"
   },
   "scripts": {
     "build": "tsc",

@@ -1,13 +1,10 @@
-import type { GoogleGenAI } from '@google/genai';
-import { loadConfig } from '@cli/config/config.js';
-import { createGeminiClient } from '@cli/services/gemini-client.js';
-import type { AppConfig } from '@cli/types/index.js';
+import type { AppContext } from '@cli/operations/context.js';
+import { createContext } from '@cli/operations/context.js';
 import type { IpcResult, ConfigValidation } from '../shared/ipc-types.js';
 
 // ===== Cached State =====
 
-let cachedConfig: AppConfig | null = null;
-let cachedClient: GoogleGenAI | null = null;
+let cachedContext: AppContext | null = null;
 
 // ===== Public API =====
 
@@ -20,7 +17,7 @@ let cachedClient: GoogleGenAI | null = null;
 export function initialize(): IpcResult<ConfigValidation> {
   const warnings: string[] = [];
 
-  // Intercept console.warn during loadConfig to capture expiration warnings
+  // Intercept console.warn during createContext to capture expiration warnings
   const originalWarn = console.warn;
   console.warn = (...args: unknown[]) => {
     const message = args.map(String).join(' ');
@@ -32,8 +29,7 @@ export function initialize(): IpcResult<ConfigValidation> {
   };
 
   try {
-    cachedConfig = loadConfig();
-    cachedClient = createGeminiClient(cachedConfig);
+    cachedContext = createContext();
 
     return {
       success: true,
@@ -44,41 +40,26 @@ export function initialize(): IpcResult<ConfigValidation> {
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    cachedConfig = null;
-    cachedClient = null;
+    cachedContext = null;
 
     return {
       success: false,
       error: message,
     };
   } finally {
-    // Always restore console.warn
     console.warn = originalWarn;
   }
 }
 
 /**
- * Get the cached GoogleGenAI client instance.
+ * Get the cached AppContext.
  * Throws if initialize() has not been called or failed.
  */
-export function getClient(): GoogleGenAI {
-  if (!cachedClient) {
+export function getContext(): AppContext {
+  if (!cachedContext) {
     throw new Error(
       'Service bridge not initialized. Call initialize() first.'
     );
   }
-  return cachedClient;
-}
-
-/**
- * Get the cached AppConfig.
- * Throws if initialize() has not been called or failed.
- */
-export function getConfig(): AppConfig {
-  if (!cachedConfig) {
-    throw new Error(
-      'Service bridge not initialized. Call initialize() first.'
-    );
-  }
-  return cachedConfig;
+  return cachedContext;
 }

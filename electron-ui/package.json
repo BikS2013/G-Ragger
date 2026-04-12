@@ -1,5 +1,5 @@
 {
-  "name": "g-ragger",
+  "name": "g-ragger-ui",
   "version": "1.0.0",
   "description": "G-Ragger Electron UI",
   "main": "out/main/index.js",

@@ -60,59 +60,69 @@
 - If I ask you to make an exception to the configuration setting rule, you must write this exception in the projects memory file, before you implement it.
 </structure-and-conventions>
 
-# GeminiRAG - Workspace-Based Document Search Tool
+# G-Ragger - Workspace-Based Document Search Tool
 
 ## Project Overview
-A TypeScript CLI tool and Electron desktop application that uses the Google Gemini File Search API to create workspaces for uploading, indexing, and searching documents. Supports uploading from disk files, web pages, YouTube videos, and personal notes. Each upload has metadata (timestamp, title, expiration, status flags) that can be used as filters when querying. YouTube uploads include the video description when the YouTube Data API key is configured.
+A unified TypeScript CLI + Electron desktop application that uses the Google Gemini File Search API to create workspaces for uploading, indexing, and searching documents. The `g-ragger` command provides both CLI subcommands and a `ui` subcommand that launches the Electron desktop app. Supports uploading from disk files, web pages, YouTube videos, and personal notes. Each upload has metadata (timestamp, title, expiration, status flags) that can be used as filters when querying.
+
+## Architecture
+Business logic lives in `src/operations/` — pure async functions shared by both
+the CLI commands (`src/commands/`) and the Electron IPC handlers (`electron-ui/src/main/ipc-handlers.ts`).
+Both use the same `AppContext` (config + Gemini client) from `src/operations/context.ts`.
 
 ## Tools
 
-<GeminiRAG>
+<G-Ragger>
     <objective>
-        CLI tool for workspace-based document management and semantic search powered by Google Gemini File Search API.
+        Unified CLI + desktop tool for workspace-based document management and
+        semantic search powered by Google Gemini File Search API. The `ui`
+        subcommand launches the Electron desktop application.
     </objective>
     <command>
-        npx tsx src/cli.ts [command]
-        # Or after build: node dist/cli.js [command]
-        # Or after npm link: geminirag [command]
+        g-ragger [command]
+        # Development: npx tsx src/cli.ts [command]
+        # After build: node dist/cli.js [command]
+        # After npm link: g-ragger [command]
     </command>
     <info>
-        GeminiRAG creates named workspaces backed by Gemini File Search Stores.
+        G-Ragger creates named workspaces backed by Gemini File Search Stores.
         Users upload content from multiple sources and query workspaces using
-        natural language with optional metadata filtering.
+        natural language with optional metadata filtering. The `ui` subcommand
+        opens the Electron desktop GUI for graphical workspace management.
 
-        Commands:
-            geminirag create <name>                         Create a new workspace
-            geminirag list                                  List all workspaces
-            geminirag delete <name>                         Delete a workspace and all its uploads
-            geminirag info <name>                           Show workspace details and statistics
+        CLI Commands:
+            g-ragger ui                                     Launch the desktop application
+            g-ragger create <name>                          Create a new workspace
+            g-ragger list                                   List all workspaces
+            g-ragger delete <name>                          Delete a workspace and all its uploads
+            g-ragger info <name>                            Show workspace details and statistics
 
-            geminirag upload <workspace> --file <path>      Upload a local file
-            geminirag upload <workspace> --url <url>        Upload content from a web page
-            geminirag upload <workspace> --youtube <url>    Upload YouTube video (structured markdown)
+            g-ragger upload <workspace> --file <path>       Upload a local file
+            g-ragger upload <workspace> --url <url>         Upload content from a web page
+            g-ragger upload <workspace> --youtube <url>     Upload YouTube video (structured markdown)
                 --with-notes                                Generate AI notes for YouTube uploads
-            geminirag upload <workspace> --note <text>      Add a personal note
+            g-ragger upload <workspace> --note <text>       Add a personal note
 
-            geminirag uploads <workspace>                   List all uploads in a workspace
+            g-ragger uploads <workspace>                    List all uploads in a workspace
                 --filter <key=value>                        Filter by metadata (repeatable)
                 --sort <field>                              Sort by timestamp or -timestamp
 
-            geminirag update-title <ws> <id> <title>        Change an upload's title
-            geminirag remove <workspace> <upload-id>        Delete an upload
-            geminirag set-expiration <ws> <id> <date>       Set expiration date (YYYY-MM-DD)
-            geminirag clear-expiration <ws> <id>            Remove expiration date
-            geminirag flag <workspace> <upload-id>          Manage status flags
+            g-ragger update-title <ws> <id> <title>         Change an upload's title
+            g-ragger remove <workspace> <upload-id>         Delete an upload
+            g-ragger set-expiration <ws> <id> <date>        Set expiration date (YYYY-MM-DD)
+            g-ragger clear-expiration <ws> <id>             Remove expiration date
+            g-ragger flag <workspace> <upload-id>           Manage status flags
                 --add <flags...>                            Add flags (completed, urgent, inactive)
                 --remove <flags...>                         Remove flags
-            geminirag labels <workspace>                    List all metadata labels in use
+            g-ragger labels <workspace>                     List all metadata labels in use
 
-            geminirag get <workspace> <upload-id>            Retrieve uploaded content
+            g-ragger get <workspace> <upload-id>            Retrieve uploaded content
                 --output <file>                             Write to file instead of stdout
                 --raw                                       Skip metadata header
                 --description                               Fetch YouTube video description directly
                 --notes                                     Generate AI notes from YouTube transcript
 
-            geminirag channel-scan <workspace>              Scan YouTube channel
+            g-ragger channel-scan <workspace>               Scan YouTube channel
                 --channel <handle|url|id>                   Channel to scan (required)
                 --from <YYYY-MM-DD>                         Start date (required)
                 --to <YYYY-MM-DD>                           End date (required)
@@ -121,7 +131,7 @@ A TypeScript CLI tool and Electron desktop application that uses the Google Gemi
                 --max-videos <n>                             Limit videos processed
                 --continue-on-error                         Skip failed videos
 
-            geminirag ask <workspace> <question>            Query a workspace
+            g-ragger ask <workspace> <question>             Query a workspace
                 --workspace <name>                          Add additional workspaces (repeatable)
                 --filter <key=value>                        Metadata filter (repeatable)
 
@@ -143,11 +153,33 @@ A TypeScript CLI tool and Electron desktop application that uses the Google Gemi
             DATE_FORMAT             Optional. DD/MM/YYYY (default), MM/DD/YYYY, or YYYY-MM-DD.
             THEME                   Optional. light (default), dark, or system.
 
+        Desktop UI Features (g-ragger ui):
+            - Workspace creation, deletion, and browsing in sidebar
+            - Content upload via 5-tab dialog (File, Web Page, YouTube, Channel Scan, Note)
+            - Upload browser with DataTable, filter bar, sortable columns
+            - Content inspector with resizable dialog
+            - YouTube content modes: Gemini, Transcript, AI Notes, Description
+            - File download via native Save dialog
+            - Workspace query with citations
+            - Configuration editor (Settings gear icon)
+            - Dark/light/system theme
+            - Window size/position persistence
+
+        Desktop UI Architecture:
+            Main process:  Operations bridge + IPC handlers (bundled to CJS by electron-vite)
+            Preload:       Typed window.api bridge with context isolation
+            Renderer:      React 19 + Tailwind CSS 4 + shadcn/ui + Zustand 5
+
         Build:
-            npx tsc
+            npx tsc                              Build CLI
+            cd electron-ui && npm run build      Build Electron UI
 
         Development:
-            npx tsx src/cli.ts [command]
+            npx tsx src/cli.ts [command]          Run CLI in dev mode
+            cd electron-ui && npm run dev         Run Electron UI in dev mode
+
+        Global install:
+            npm link                             Creates global 'g-ragger' command
 
         Tests:
             npx tsx test_scripts/test-validation.ts
@@ -159,165 +191,44 @@ A TypeScript CLI tool and Electron desktop application that uses the Google Gemi
             npx tsx test_scripts/test-notes-generator.ts
             npx tsx test_scripts/test-youtube-data-api.ts
             npx tsx test_scripts/test-get-command.ts
+            npx tsx test_scripts/test-filters.ts
+            npx tsx test_scripts/test-electron-build.ts
+            npx tsx test_scripts/test-ipc-types.ts
 
         Registry location: ~/.geminirag/registry.json
         Config file: ~/.geminirag/config.json
         Prerequisites: Node.js 18+, Gemini API key from https://aistudio.google.com/apikey
 
-        Examples:
-            geminirag create my-research
-            geminirag upload my-research --url https://example.com/article
-            geminirag upload my-research --youtube https://youtube.com/watch?v=abc123
-            geminirag upload my-research --youtube https://youtu.be/abc123 --with-notes
-            geminirag upload my-research --note "Remember to check the Q3 results"
-            geminirag upload my-research --file ~/docs/report.pdf
-            geminirag uploads my-research --filter source_type=web
-            geminirag flag my-research <upload-id> --add urgent
-            geminirag get my-research <upload-id>
-            geminirag get my-research <upload-id> --raw --output transcript.md
-            geminirag get my-research <upload-id> --description
-            geminirag get my-research <upload-id> --notes
-            geminirag uploads my-research --filter channel=IndyDevDan
-            geminirag uploads my-research --filter published_from=2026-03-01 --filter published_to=2026-04-01
-            geminirag channel-scan my-research --channel @IndyDevDan --from 2026-01-01 --to 2026-04-10
-            geminirag channel-scan my-research --channel @IndyDevDan --from 2026-03-01 --to 2026-04-01 --with-notes --continue-on-error
-            geminirag channel-scan my-research --channel @IndyDevDan --from 2026-01-01 --to 2026-04-10 --dry-run
-            geminirag ask my-research "What are the key findings?" --filter source_type=web
-            geminirag ask my-research "Summary" --workspace other-workspace
-    </info>
-</GeminiRAG>
-
-<G-Ragger>
-    <objective>
-        G-Ragger: Electron desktop application providing a graphical interface for GeminiRAG workspace exploration, upload browsing, content inspection, file download, and semantic querying with special YouTube content viewing capabilities.
-    </objective>
-    <command>
-        cd electron-ui && npm run dev
-        # Or after build: cd electron-ui && npm run preview
-    </command>
-    <info>
-        G-Ragger is an Electron desktop app (React + Tailwind + shadcn/ui) that provides
-        a polished GUI for all GeminiRAG workspace operations. It reuses the existing
-        CLI service layer via IPC. The app name appears as "G-Ragger" in the title bar,
-        header, and all dialogs.
-
-        Architecture:
-            Main process:  Service bridge + 22 IPC handlers (bundled to CJS by electron-vite)
-            Preload:       Typed window.api bridge with context isolation
-            Renderer:      React 19 + Tailwind CSS 4 + shadcn/ui + Zustand 5
-
-        Features:
-            - Workspace creation: "+" button in sidebar opens dialog with name validation
-              (alphanumeric, hyphens, underscores), max 10 workspaces, auto-selects on success
-            - Content upload: "Add Content" button opens 5-tab modal dialog:
-                * File: native file picker via Electron dialog, supports pdf/txt/md/html/csv/doc/xlsx/etc
-                * Web Page: URL input with validation, extracts content via Readability
-                * YouTube: URL input with optional "Generate AI notes" checkbox
-                * Channel Scan: bulk upload from YouTube channel by date range
-                  (channel handle/URL, from/to dates, optional AI notes)
-                * Note: free-text textarea with auto-generated title preview
-              All uploads show non-dismissable loading dialog with elapsed time counter
-              and context-specific status messages. Errors shown inline for retry.
-            - YouTube metadata: channel name and publish date stored in upload metadata
-              and displayed in the upload detail view (for both CLI and UI uploads)
-            - Workspace sidebar: browse all workspaces, see upload counts and source type stats
-            - Upload browser: DataTable with filter bar (source type, flags, expiration),
-              sortable columns, scrollable list
-            - Content inspector: resizable dialog showing full metadata + content
-            - File download: native Save dialog, defaults to .md
-            - Workspace query: ask questions, see answers with citations
-            - Query filters: Gemini-side (source_type, source_url) and client-side (flags, expiration)
-            - YouTube content modes (4 buttons for YouTube uploads):
-                * Gemini: content from Gemini File Search store (with RECITATION fallback
-                  that returns analytical notes when verbatim retrieval is blocked)
-                * Transcript: raw transcript fetched directly from YouTube with
-                  timestamps ([MM:SS]) and paragraph breaks at natural pauses
-                * AI Notes: AI-generated structured notes (summary, key points,
-                  important terms, action items) from the transcript
-                * Description: the YouTube video description fetched via YouTube
-                  Data API (default view for YouTube uploads; requires YOUTUBE_DATA_API_KEY)
-            - Upload deletion: delete button in upload detail dialog (removes from
-              Gemini and local registry with confirmation prompt)
-            - Per-row upload deletion: trash icon on each table row (hover-visible)
-            - Workspace deletion: trash icon on each workspace in sidebar (hover-visible,
-              deletes Gemini store and all uploads with confirmation)
-            - Configuration editor: Settings gear icon in header opens dialog to
-              view/edit ~/.geminirag/config.json (API keys, model, expiration dates)
-            - Dark theme: light/dark/system theme via Settings dialog (THEME config)
-            - Date format: configurable DD/MM/YYYY, MM/DD/YYYY, or YYYY-MM-DD
-              (DATE_FORMAT config, European default)
-            - Upload date display: YouTube uploads show publish date, others show upload date
-            - Filter bar: source type, flags, expiration, channel name, publish date range
-            - Source URLs clickable (opens in external browser with protocol validation)
-            - Copy-to-clipboard for upload IDs and URLs
-
-        IPC Channels:
-            config:validate          Validate Gemini API configuration
-            workspace:list           List all workspaces
-            workspace:get            Get workspace details with statistics
-            workspace:create         Create new workspace (with Gemini store + rollback)
-            workspace:delete         Delete workspace (Gemini store + registry)
-            upload:list              List uploads with filters and sorting
-            upload:getContent        Retrieve document content from Gemini
-            upload:download          Download content via native Save dialog
-            upload:file              Upload local file (native picker + Gemini + rollback)
-            upload:url               Upload web page content (extract + Gemini + rollback)
-            upload:youtube           Upload YouTube video (transcript + optional notes + rollback)
-            upload:note              Upload personal note (Gemini + rollback)
-            upload:delete            Delete upload from Gemini and local registry
-            dialog:openFile          Open native file picker dialog
-            youtube:channelScan      Bulk upload from YouTube channel by date range
-            config:get               Read ~/.geminirag/config.json
-            config:save              Write ~/.geminirag/config.json and re-initialize
-            query:ask                Query workspace with filters
-            youtube:getTranscript    Fetch raw transcript directly from YouTube
-            youtube:getNotes         Generate AI notes from YouTube transcript
-            youtube:getDescription   Fetch video description via YouTube Data API
-            shell:openExternal       Open URLs in external browser (validated)
-
-        Build:
-            cd electron-ui && npm run build
-
-        Development:
-            cd electron-ui && npm run dev
-
-        Configuration:
-            Uses the same config as the CLI (env vars > .env > ~/.geminirag/config.json)
-            GEMINI_API_KEY and GEMINI_MODEL are required
-            YOUTUBE_DATA_API_KEY is optional but needed for the Description button
-            DATE_FORMAT controls date display (DD/MM/YYYY default, MM/DD/YYYY, YYYY-MM-DD)
-            THEME controls appearance (light default, dark, system)
-            Missing config shows error banner in UI (no fallback values)
-            All settings editable via Settings dialog (gear icon in header)
-
-        Tests:
-            npx tsx test_scripts/test-filters.ts        (50 filter utility tests)
-            npx tsx test_scripts/test-electron-build.ts  (25 build structure tests)
-            npx tsx test_scripts/test-ipc-types.ts       (53 IPC contract consistency tests)
-
-        Source location: electron-ui/
-        Prerequisites: Node.js 18+, npm, Gemini API key
-
         Key directories:
-            electron-ui/src/main/       Main process (service-bridge, ipc-handlers)
+            src/operations/             Shared business logic (used by CLI + Electron)
+            src/commands/               CLI command handlers (thin wrappers)
+            src/services/               Low-level service layer (Gemini, registry, extractors)
+            src/utils/                  Shared utilities (filters, format, validation)
+            electron-ui/src/main/       Electron main process (IPC handlers, thin wrappers)
             electron-ui/src/preload/    Preload script (typed API bridge)
             electron-ui/src/shared/     Shared IPC types
             electron-ui/src/renderer/   React application
 
-        Notable behaviors:
-            - YouTube uploads default to showing the video Description on open
-            - Gemini RECITATION filter: when verbatim content retrieval is blocked
-              (common for YouTube transcripts), the system automatically retries
-              with an analytical prompt and prefixes the result with a [NOTE:] banner
-            - The upload detail dialog is resizable (drag bottom-right corner);
-              the content viewer fills all available space
-            - Filter/sort utilities are shared between CLI and UI via src/utils/filters.ts
-            - Native modules (bufferutil, utf-8-validate, canvas, jsdom,
-              @mozilla/readability, turndown, turndown-plugin-gfm, mime-types,
-              youtube-transcript-plus) are externalized in electron.vite.config.ts
-            - YouTube uploads store channel name and publish date in metadata
-            - Window size/position persisted to ~/.geminirag/window-state.json
-            - Upload detail dialog size persisted in localStorage
-            - App quits when last window is closed (all platforms)
+        Examples:
+            g-ragger ui
+            g-ragger create my-research
+            g-ragger upload my-research --url https://example.com/article
+            g-ragger upload my-research --youtube https://youtube.com/watch?v=abc123
+            g-ragger upload my-research --youtube https://youtu.be/abc123 --with-notes
+            g-ragger upload my-research --note "Remember to check the Q3 results"
+            g-ragger upload my-research --file ~/docs/report.pdf
+            g-ragger uploads my-research --filter source_type=web
+            g-ragger flag my-research <upload-id> --add urgent
+            g-ragger get my-research <upload-id>
+            g-ragger get my-research <upload-id> --raw --output transcript.md
+            g-ragger get my-research <upload-id> --description
+            g-ragger get my-research <upload-id> --notes
+            g-ragger uploads my-research --filter channel=IndyDevDan
+            g-ragger uploads my-research --filter published_from=2026-03-01 --filter published_to=2026-04-01
+            g-ragger channel-scan my-research --channel @IndyDevDan --from 2026-01-01 --to 2026-04-10
+            g-ragger channel-scan my-research --channel @IndyDevDan --from 2026-03-01 --to 2026-04-01 --with-notes --continue-on-error
+            g-ragger channel-scan my-research --channel @IndyDevDan --from 2026-01-01 --to 2026-04-10 --dry-run
+            g-ragger ask my-research "What are the key findings?" --filter source_type=web
+            g-ragger ask my-research "Summary" --workspace other-workspace
     </info>
 </G-Ragger>

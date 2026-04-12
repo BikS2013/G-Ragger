@@ -1,14 +1,13 @@
 import { Command } from 'commander';
-import { loadConfig } from '../config/config.js';
-import { createGeminiClient } from '../services/gemini-client.js';
-import { deleteDocument } from '../services/file-search.js';
+import { createContext } from '../operations/context.js';
 import {
-  getWorkspace,
-  updateUpload,
-  removeUpload,
-} from '../services/registry.js';
-import { validateDate, validateFlags } from '../utils/validation.js';
-import type { Flag } from '../types/index.js';
+  updateTitle,
+  removeUploadEntry,
+  setExpiration,
+  clearExpiration,
+  updateFlags,
+  getLabels,
+} from '../operations/metadata-ops.js';
 
 /**
  * Register metadata management commands:
@@ -24,9 +23,7 @@ export function registerMetadataCommands(program: Command): void {
     .description('Update the title of an upload')
     .action((workspace: string, uploadId: string, title: string) => {
       try {
-        // Validates workspace and upload exist
-        getWorkspace(workspace);
-        updateUpload(workspace, uploadId, { title });
+        updateTitle(workspace, uploadId, title);
         console.log(`Title updated to: ${title}`);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -43,22 +40,8 @@ export function registerMetadataCommands(program: Command): void {
     .description('Remove an upload from a workspace')
     .action(async (workspace: string, uploadId: string) => {
       try {
-        // Get workspace and upload details
-        const workspaceData = getWorkspace(workspace);
-        const upload = workspaceData.uploads[uploadId];
-        if (!upload) {
-          throw new Error(`Upload '${uploadId}' not found in workspace '${workspace}'`);
-        }
-
-        const config = loadConfig();
-        const ai = createGeminiClient(config);
-
-        // Delete from Gemini
-        await deleteDocument(ai, upload.documentName);
-
-        // Remove from local registry
-        removeUpload(workspace, uploadId);
-
+        const ctx = createContext();
+        await removeUploadEntry(ctx, workspace, uploadId);
         console.log(`Upload '${uploadId}' removed successfully.`);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -76,10 +59,7 @@ export function registerMetadataCommands(program: Command): void {
     .description('Set an expiration date on an upload')
     .action((workspace: string, uploadId: string, date: string) => {
       try {
-        validateDate(date);
-        // Validates workspace and upload exist
-        getWorkspace(workspace);
-        updateUpload(workspace, uploadId, { expirationDate: date });
+        setExpiration(workspace, uploadId, date);
         console.log(`Expiration date set to: ${date}`);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -96,9 +76,7 @@ export function registerMetadataCommands(program: Command): void {
     .description('Clear the expiration date from an upload')
     .action((workspace: string, uploadId: string) => {
       try {
-        // Validates workspace and upload exist
-        getWorkspace(workspace);
-        updateUpload(workspace, uploadId, { expirationDate: null });
+        clearExpiration(workspace, uploadId);
         console.log('Expiration date cleared.');
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -122,43 +100,7 @@ export function registerMetadataCommands(program: Command): void {
         options: { add?: string[]; remove?: string[] }
       ) => {
         try {
-          if (!options.add && !options.remove) {
-            throw new Error('At least one of --add or --remove must be provided');
-          }
-
-          // Validate flag values
-          if (options.add) {
-            validateFlags(options.add);
-          }
-          if (options.remove) {
-            validateFlags(options.remove);
-          }
-
-          // Get current upload to read existing flags
-          const workspaceData = getWorkspace(workspace);
-          const upload = workspaceData.uploads[uploadId];
-          if (!upload) {
-            throw new Error(`Upload '${uploadId}' not found in workspace '${workspace}'`);
-          }
-
-          let currentFlags: Flag[] = [...upload.flags];
-
-          // Add flags (avoiding duplicates)
-          if (options.add) {
-            for (const flag of options.add as Flag[]) {
-              if (!currentFlags.includes(flag)) {
-                currentFlags.push(flag);
-              }
-            }
-          }
-
-          // Remove flags
-          if (options.remove) {
-            const toRemove = new Set(options.remove as Flag[]);
-            currentFlags = currentFlags.filter((f) => !toRemove.has(f));
-          }
-
-          updateUpload(workspace, uploadId, { flags: currentFlags });
+          const currentFlags = updateFlags(workspace, uploadId, options.add, options.remove);
           console.log(`Flags updated: [${currentFlags.join(', ')}]`);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
@@ -175,35 +117,13 @@ export function registerMetadataCommands(program: Command): void {
     .description('List all distinct metadata labels used in a workspace')
     .action((workspace: string) => {
       try {
-        const workspaceData = getWorkspace(workspace);
-        const uploads = Object.values(workspaceData.uploads);
-
-        if (uploads.length === 0) {
+        const labels = getLabels(workspace);
+        if (labels.length === 0) {
           console.log('No uploads in this workspace.');
           return;
         }
-
-        // Collect all distinct metadata keys across uploads
-        const labels = new Set<string>();
-        for (const upload of uploads) {
-          // Standard fields that serve as metadata labels
-          labels.add('title');
-          labels.add('source_type');
-          if (upload.sourceUrl !== null) {
-            labels.add('source_url');
-          }
-          if (upload.expirationDate !== null) {
-            labels.add('expiration_date');
-          }
-          if (upload.flags.length > 0) {
-            labels.add('flags');
-          }
-          labels.add('timestamp');
-        }
-
-        const sortedLabels = Array.from(labels).sort();
         console.log('Metadata labels in use:');
-        for (const label of sortedLabels) {
+        for (const label of labels) {
           console.log(`  - ${label}`);
         }
       } catch (error) {

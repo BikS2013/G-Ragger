@@ -1,7 +1,7 @@
 import { Command } from 'commander';
-import { getWorkspace } from '../services/registry.js';
+import { listUploads } from '../operations/upload-ops.js';
+import { parseListingFilter } from '../utils/filters.js';
 import { formatUploadTable } from '../utils/format.js';
-import { parseListingFilter, applyFilters, sortUploads } from '../utils/filters.js';
 import type { ListingOptions } from '../types/index.js';
 
 /**
@@ -19,19 +19,11 @@ export function registerUploadsCommand(program: Command): void {
     .description('List all uploads in a workspace')
     .action((workspace: string, options: ListingOptions) => {
       try {
-        const workspaceData = getWorkspace(workspace);
-        let uploads = Object.values(workspaceData.uploads);
+        const filters = options.filter
+          ? options.filter.map(parseListingFilter)
+          : undefined;
 
-        // Apply filters
-        if (options.filter) {
-          const parsedFilters = options.filter.map(parseListingFilter);
-          uploads = applyFilters(uploads, parsedFilters);
-        }
-
-        // Sort uploads (default: descending by timestamp)
-        uploads = sortUploads(uploads, options.sort);
-
-        // Format and display
+        const uploads = listUploads(workspace, filters, options.sort);
         console.log(formatUploadTable(uploads));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

@@ -1,14 +1,7 @@
 import { Command } from 'commander';
-import { loadConfig } from '../config/config.js';
-import { createGeminiClient } from '../services/gemini-client.js';
-import { createStore, deleteStore } from '../services/file-search.js';
-import {
-  addWorkspace,
-  removeWorkspace,
-  getWorkspace,
-  listWorkspaces,
-} from '../services/registry.js';
-import { validateWorkspaceName } from '../utils/validation.js';
+import { createContext } from '../operations/context.js';
+import { createWorkspace, deleteWorkspace } from '../operations/workspace-ops.js';
+import { getWorkspace, listWorkspaces } from '../services/registry.js';
 import { formatWorkspaceTable, formatWorkspaceInfo } from '../utils/format.js';
 
 /**
@@ -22,33 +15,10 @@ export function registerWorkspaceCommands(program: Command): void {
     .description('Create a new workspace')
     .action(async (name: string) => {
       try {
-        validateWorkspaceName(name);
-
-        // Check max 10 workspaces
-        const existing = listWorkspaces();
-        if (existing.length >= 10) {
-          throw new Error(
-            'Maximum 10 workspaces reached (Gemini API limit). Delete a workspace before creating a new one.'
-          );
-        }
-
-        // Check workspace does not already exist
-        const alreadyExists = existing.some((ws) => ws.name === name);
-        if (alreadyExists) {
-          throw new Error(`Workspace '${name}' already exists`);
-        }
-
-        const config = loadConfig();
-        const ai = createGeminiClient(config);
-
-        // Create Gemini File Search Store
-        const storeName = await createStore(ai, name);
-
-        // Register in local registry
-        addWorkspace(name, storeName);
-
-        console.log(`Workspace '${name}' created successfully.`);
-        console.log(`Store: ${storeName}`);
+        const ctx = createContext();
+        const result = await createWorkspace(ctx, name);
+        console.log(`Workspace '${result.name}' created successfully.`);
+        console.log(`Store: ${result.storeName}`);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.error(`Error: ${message}`);
@@ -78,17 +48,8 @@ export function registerWorkspaceCommands(program: Command): void {
     .description('Delete a workspace and all its uploads')
     .action(async (name: string) => {
       try {
-        const workspace = getWorkspace(name);
-
-        const config = loadConfig();
-        const ai = createGeminiClient(config);
-
-        // Delete Gemini File Search Store (cascades to all documents)
-        await deleteStore(ai, workspace.storeName);
-
-        // Remove from local registry
-        removeWorkspace(name);
-
+        const ctx = createContext();
+        await deleteWorkspace(ctx, name);
         console.log(`Workspace '${name}' deleted successfully.`);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
