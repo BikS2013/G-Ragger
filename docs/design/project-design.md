@@ -5858,3 +5858,1625 @@ Maximum parallelism: 2 coding streams after Unit 1 completes (Units 2+3), and 2 
 - The file path is lost if the dialog is closed and reopened (acceptable UX: user picks again)
 - Other components cannot react to a file being selected (no known use case)
 - Simpler store with fewer state fields
+
+---
+
+## V3: Upload Tags
+
+**Date**: 2026-04-12
+**Specification**: docs/reference/refined-request-upload-tags.md
+**Plan**: docs/design/plan-006-upload-tags.md
+**Investigation**: docs/reference/investigation-upload-tags.md
+
+This section defines the detailed technical design for adding user-defined string tags to uploads across the full stack: data model, validation, CLI commands, filter/query logic, Electron IPC layer, and Electron UI. Tags are free-form strings (normalized to lowercase) that users attach to uploads for flexible categorization and retrieval.
+
+### Key Design Decisions
+
+| Decision | Choice |
+|----------|--------|
+| Storage | Local registry + Gemini metadata (`stringListValue`) |
+| Multiple tag filter logic | OR within tag group, AND with other filters |
+| Case sensitivity | Case-insensitive (normalize to lowercase on storage) |
+| Max tags per upload | No limit |
+| UI input pattern | Chip/badge with Enter to add, X to remove |
+
+---
+
+### V3.1 Data Model Changes
+
+#### V3.1.1 `UploadEntry` -- add `tags` field
+
+**File**: `src/types/index.ts`, line 11-32
+
+Add `tags?: string[]` after the `flags` field. The field is optional for backward compatibility with existing registry entries that lack it.
+
+```typescript
+export interface UploadEntry {
+  /** Unique identifier (UUID v4) */
+  id: string;
+  /** Gemini File Search document resource name */
+  documentName: string;
+  /** Human-readable title */
+  title: string;
+  /** ISO 8601 UTC datetime of upload creation */
+  timestamp: string;
+  /** Content source type */
+  sourceType: SourceType;
+  /** Original URL/path for web/youtube/file sources; null for notes */
+  sourceUrl: string | null;
+  /** ISO 8601 date for expiration; null if no expiration set */
+  expirationDate: string | null;
+  /** Status flags array */
+  flags: Flag[];
+  /** User-defined tags (lowercase, deduplicated) */
+  tags?: string[];                          // <-- NEW
+  /** YouTube channel title (for youtube source type) */
+  channelTitle?: string;
+  /** Original publish date ISO 8601 (for youtube source type) */
+  publishedAt?: string;
+}
+```
+
+**Backward compatibility**: Code that reads `upload.tags` must always use `(upload.tags ?? [])` to handle entries created before this feature.
+
+#### V3.1.2 `UploadOptions` -- add `tag` field
+
+**File**: `src/types/index.ts`, line 187-193
+
+```typescript
+export interface UploadOptions {
+  file?: string;
+  url?: string;
+  youtube?: string;
+  note?: string;
+  withNotes?: boolean;
+  tag?: string[];                           // <-- NEW
+}
+```
+
+#### V3.1.3 `ChannelScanOptions` -- add `tag` field
+
+**File**: `src/types/index.ts`, line 157-165
+
+```typescript
+export interface ChannelScanOptions {
+  channel: string;
+  from: string;
+  to: string;
+  withNotes?: boolean;
+  dryRun?: boolean;
+  maxVideos?: number;
+  continueOnError?: boolean;
+  tag?: string[];                           // <-- NEW
+}
+```
+
+#### V3.1.4 `ClientFilterKey` -- add `'tag'`
+
+**File**: `src/types/index.ts`, line 127
+
+```typescript
+// BEFORE:
+export type ClientFilterKey = 'flags' | 'expiration_date' | 'expiration_status';
+
+// AFTER:
+export type ClientFilterKey = 'flags' | 'expiration_date' | 'expiration_status' | 'tag';
+```
+
+---
+
+### V3.2 Tag Validation
+
+**File**: `src/utils/validation.ts`
+
+Add after `validateFlags()` (line 95):
+
+```typescript
+/**
+ * Validate, normalize, and deduplicate tags.
+ *
+ * Rules:
+ * - Tags must be non-empty after trimming
+ * - Tags must not contain the '=' character
+ * - Tags must not exceed 50 characters
+ * - Tags are normalized to lowercase
+ * - Duplicates are removed (after normalization)
+ *
+ * @param tags - Array of raw tag strings from user input
+ * @returns Cleaned array of lowercase, deduplicated tags
+ * @throws Error with descriptive message if any tag is invalid
+ */
+export function validateTags(tags: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const raw of tags) {
+    const tag = raw.trim().toLowerCase();
+
+    if (tag.length === 0) {
+      throw new Error(
+        `Invalid tag: tags must not be empty after trimming. Got: '${raw}'`
+      );
+    }
+
+    if (tag.includes('=')) {
+      throw new Error(
+        `Invalid tag '${tag}': tags must not contain the '=' character (reserved for filter syntax).`
+      );
+    }
+
+    if (tag.length > 50) {
+      throw new Error(
+        `Invalid tag '${tag}': tags must not exceed 50 characters (got ${tag.length}).`
+      );
+    }
+
+    if (!seen.has(tag)) {
+      seen.add(tag);
+      result.push(tag);
+    }
+  }
+
+  return result;
+}
+```
+
+**Design notes**:
+- Unlike `validateFlags()` which is a type guard, `validateTags()` returns the cleaned array because it performs normalization (lowercasing, deduplication).
+- The `=` restriction prevents ambiguity in filter syntax (`tag=value`).
+- Validation is called at entry points (CLI commands, IPC handlers) before passing tags to operations.
+
+---
+
+### V3.3 Operations Layer Changes
+
+#### V3.3.1 `performUpload` -- accept tags
+
+**File**: `src/operations/upload-ops.ts`, line 33-83
+
+Change the `performUpload` signature and body:
+
+```typescript
+async function performUpload(
+  ctx: AppContext,
+  workspace: string,
+  extracted: ExtractedContent,
+  tags?: string[]                           // <-- NEW parameter
+): Promise<UploadResult> {
+  const ws = getWorkspace(workspace);
+
+  const customMetadata: CustomMetadataEntry[] = [
+    { key: 'source_type', stringValue: extracted.sourceType },
+  ];
+  if (extracted.sourceUrl !== null) {
+    customMetadata.push({ key: 'source_url', stringValue: extracted.sourceUrl });
+  }
+
+  // NEW: Store tags in Gemini custom metadata as stringListValue
+  if (tags && tags.length > 0) {
+    customMetadata.push({ key: 'tags', stringListValue: { values: tags } });
+  }
+
+  const docName = await uploadContent(
+    ctx.client,
+    ws.storeName,
+    extracted.content,
+    extracted.isFilePath,
+    extracted.mimeType,
+    extracted.title,
+    customMetadata
+  );
+
+  const id = uuidv4();
+  const entry: UploadEntry = {
+    id,
+    documentName: docName,
+    title: extracted.title,
+    timestamp: new Date().toISOString(),
+    sourceType: extracted.sourceType,
+    sourceUrl: extracted.sourceUrl,
+    expirationDate: null,
+    flags: [],
+    tags: tags ?? [],                        // <-- NEW field
+    channelTitle: extracted.channelTitle,
+    publishedAt: extracted.publishedAt,
+  };
+
+  try {
+    addUpload(workspace, entry);
+  } catch (registryError) {
+    try {
+      await deleteDocument(ctx.client, docName);
+    } catch {
+      // Best-effort rollback
+    }
+    throw registryError;
+  }
+
+  return { id, title: extracted.title, sourceType: extracted.sourceType };
+}
+```
+
+#### V3.3.2 Public upload functions -- pass through tags
+
+All four public functions gain a `tags?: string[]` parameter and pass it to `performUpload`:
+
+```typescript
+export async function uploadFile(
+  ctx: AppContext,
+  workspace: string,
+  filePath: string,
+  tags?: string[]                           // <-- NEW
+): Promise<UploadResult> {
+  const extracted = await extractDiskFile(filePath);
+  return performUpload(ctx, workspace, extracted, tags);
+}
+
+export async function uploadUrl(
+  ctx: AppContext,
+  workspace: string,
+  url: string,
+  tags?: string[]                           // <-- NEW
+): Promise<UploadResult> {
+  validateUrl(url);
+  const extracted = await extractWebPage(url);
+  return performUpload(ctx, workspace, extracted, tags);
+}
+
+export async function uploadYoutube(
+  ctx: AppContext,
+  workspace: string,
+  url: string,
+  withNotes: boolean,
+  tags?: string[]                           // <-- NEW
+): Promise<UploadResult> {
+  extractYouTubeVideoId(url);
+  const extracted = await extractYouTubeEnhanced(url, {
+    withNotes,
+    ai: withNotes ? ctx.client : undefined,
+    model: withNotes ? ctx.config.geminiModel : undefined,
+    youtubeApiKey: ctx.config.youtubeDataApiKey,
+  });
+  return performUpload(ctx, workspace, extracted, tags);
+}
+
+export async function uploadNote(
+  ctx: AppContext,
+  workspace: string,
+  text: string,
+  tags?: string[]                           // <-- NEW
+): Promise<UploadResult> {
+  const extracted = extractNote(text);
+  return performUpload(ctx, workspace, extracted, tags);
+}
+```
+
+#### V3.3.3 `updateTags` -- new function in metadata-ops.ts
+
+**File**: `src/operations/metadata-ops.ts`
+
+Add after `updateFlags()` (line 101). Follows the exact `updateFlags()` pattern:
+
+```typescript
+import { validateTags } from '../utils/validation.js';
+
+/**
+ * Add or remove tags on an upload.
+ * Returns the updated tags array.
+ */
+export function updateTags(
+  workspace: string,
+  uploadId: string,
+  add?: string[],
+  remove?: string[]
+): string[] {
+  if (!add && !remove) {
+    throw new Error('At least one of --add or --remove must be provided');
+  }
+
+  // Validate and normalize inputs
+  const normalizedAdd = add ? validateTags(add) : undefined;
+  const normalizedRemove = remove ? validateTags(remove) : undefined;
+
+  const ws = getWorkspace(workspace);
+  const upload = ws.uploads[uploadId];
+  if (!upload) {
+    throw new Error(`Upload '${uploadId}' not found in workspace '${workspace}'`);
+  }
+
+  let currentTags: string[] = [...(upload.tags ?? [])];
+
+  if (normalizedAdd) {
+    for (const tag of normalizedAdd) {
+      if (!currentTags.includes(tag)) {
+        currentTags.push(tag);
+      }
+    }
+  }
+
+  if (normalizedRemove) {
+    const toRemove = new Set(normalizedRemove);
+    currentTags = currentTags.filter((t) => !toRemove.has(t));
+  }
+
+  updateUpload(workspace, uploadId, { tags: currentTags });
+  return currentTags;
+}
+```
+
+#### V3.3.4 `getLabels` -- include 'tags'
+
+**File**: `src/operations/metadata-ops.ts`, line 106-125
+
+Add after the flags check (line 120):
+
+```typescript
+if ((upload.tags ?? []).length > 0) labels.add('tags');
+```
+
+#### V3.3.5 `channelScan` -- accept and pass through tags
+
+**File**: `src/operations/youtube-ops.ts`, line 168-306
+
+Extend the `options` parameter type:
+
+```typescript
+export async function channelScan(
+  ctx: AppContext,
+  workspace: string,
+  channel: string,
+  fromDate: string,
+  toDate: string,
+  options: {
+    withNotes?: boolean;
+    dryRun?: boolean;
+    maxVideos?: number;
+    continueOnError?: boolean;
+    tags?: string[];                        // <-- NEW
+  } = {},
+  progress?: ChannelScanProgress
+): Promise<{ ... }> {
+```
+
+Inside the scan loop, add tags to custom metadata (after line 248):
+
+```typescript
+const customMetadata: CustomMetadataEntry[] = [
+  { key: 'source_type', stringValue: 'youtube' },
+  { key: 'source_url', stringValue: videoUrl },
+];
+
+// NEW: Add tags to Gemini custom metadata
+if (options.tags && options.tags.length > 0) {
+  customMetadata.push({ key: 'tags', stringListValue: { values: options.tags } });
+}
+```
+
+And add tags to the UploadEntry construction (around line 262):
+
+```typescript
+const entry: UploadEntry = {
+  id: uploadId,
+  documentName,
+  title: extracted.title,
+  timestamp: new Date().toISOString(),
+  sourceType: 'youtube',
+  sourceUrl: videoUrl,
+  expirationDate: null,
+  flags: [],
+  tags: options.tags ?? [],                  // <-- NEW
+  channelTitle: video.channelTitle,
+  publishedAt: video.publishedAt,
+};
+```
+
+---
+
+### V3.4 Filter Logic Changes
+
+**File**: `src/utils/filters.ts`
+
+#### V3.4.1 `CLIENT_FILTER_KEYS` -- add 'tag'
+
+```typescript
+// BEFORE (line 11):
+export const CLIENT_FILTER_KEYS = new Set(['flags', 'expiration_date', 'expiration_status']);
+
+// AFTER:
+export const CLIENT_FILTER_KEYS = new Set(['flags', 'expiration_date', 'expiration_status', 'tag']);
+```
+
+#### V3.4.2 `parseListingFilter` -- add 'tag' to valid keys
+
+```typescript
+// BEFORE (line 127):
+const validKeys = new Set(['source_type', 'flags', 'expiration_status', 'channel', 'published_from', 'published_to']);
+
+// AFTER:
+const validKeys = new Set(['source_type', 'flags', 'expiration_status', 'channel', 'published_from', 'published_to', 'tag']);
+```
+
+Also update the error message to include `tag` in the valid keys list.
+
+#### V3.4.3 `applyFilters` -- OR pre-grouping algorithm
+
+The key design challenge is implementing OR logic for tags while preserving AND logic for all other filters. The algorithm:
+
+1. Before the main filter loop, extract all `tag` filters into a separate array.
+2. Apply tag filters as a group with OR semantics (upload has ANY of the specified tags).
+3. Apply remaining non-tag filters with the existing AND logic.
+4. The tag group is ANDed with the non-tag filters.
+
+```typescript
+export function applyFilters(
+  uploads: UploadEntry[],
+  filters: { key: string; value: string }[]
+): UploadEntry[] {
+  if (filters.length === 0) return uploads;
+
+  // Pre-group: extract tag filters for OR logic
+  const tagValues = filters
+    .filter((f) => f.key === 'tag')
+    .map((f) => f.value.toLowerCase());
+  const nonTagFilters = filters.filter((f) => f.key !== 'tag');
+
+  return uploads.filter((upload) => {
+    // Tag filter: OR logic -- upload must have ANY of the specified tags
+    if (tagValues.length > 0) {
+      const uploadTags = (upload.tags ?? []).map((t) => t.toLowerCase());
+      if (!tagValues.some((tv) => uploadTags.includes(tv))) {
+        return false;
+      }
+    }
+
+    // Non-tag filters: existing AND logic (unchanged)
+    for (const filter of nonTagFilters) {
+      if (filter.key === 'source_type') {
+        if (upload.sourceType !== filter.value) {
+          return false;
+        }
+      } else if (filter.key === 'flags') {
+        if (!upload.flags.includes(filter.value as UploadEntry['flags'][number])) {
+          return false;
+        }
+      } else if (filter.key === 'expiration_status') {
+        const indicator = getExpirationIndicator(upload.expirationDate);
+        if (filter.value === 'expired' && indicator !== '[EXPIRED]') {
+          return false;
+        }
+        if (filter.value === 'expiring_soon' && indicator !== '[EXPIRING SOON]') {
+          return false;
+        }
+        if (filter.value === 'active' && indicator !== '') {
+          return false;
+        }
+      } else if (filter.key === 'channel') {
+        if (!upload.channelTitle || !upload.channelTitle.toLowerCase().includes(filter.value.toLowerCase())) {
+          return false;
+        }
+      } else if (filter.key === 'published_from') {
+        if (!upload.publishedAt || upload.publishedAt < filter.value) {
+          return false;
+        }
+      } else if (filter.key === 'published_to') {
+        if (!upload.publishedAt || upload.publishedAt > filter.value) {
+          return false;
+        }
+      }
+    }
+    return true;
+  });
+}
+```
+
+#### V3.4.4 `passesClientFilters` -- same OR pre-grouping
+
+```typescript
+export function passesClientFilters(
+  upload: UploadEntry | undefined,
+  clientFilters: ParsedFilter[]
+): boolean {
+  if (clientFilters.length === 0) {
+    return true;
+  }
+
+  if (!upload) {
+    return false;
+  }
+
+  // Pre-group: extract tag filters for OR logic
+  const tagValues = clientFilters
+    .filter((f) => f.key === 'tag')
+    .map((f) => f.value.toLowerCase());
+  const nonTagFilters = clientFilters.filter((f) => f.key !== 'tag');
+
+  // Tag filter: OR logic -- upload must have ANY of the specified tags
+  if (tagValues.length > 0) {
+    const uploadTags = (upload.tags ?? []).map((t) => t.toLowerCase());
+    if (!tagValues.some((tv) => uploadTags.includes(tv))) {
+      return false;
+    }
+  }
+
+  // Non-tag filters: existing AND logic
+  for (const filter of nonTagFilters) {
+    if (filter.key === 'flags') {
+      if (!upload.flags.includes(filter.value as UploadEntry['flags'][number])) {
+        return false;
+      }
+    } else if (filter.key === 'expiration_status') {
+      const indicator = getExpirationIndicator(upload.expirationDate);
+      if (filter.value === 'expired' && indicator !== '[EXPIRED]') {
+        return false;
+      }
+      if (filter.value === 'expiring_soon' && indicator !== '[EXPIRING SOON]') {
+        return false;
+      }
+      if (filter.value === 'active' && indicator !== '') {
+        return false;
+      }
+    } else if (filter.key === 'expiration_date') {
+      if (upload.expirationDate !== filter.value) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+```
+
+**Filter interaction example**: `--filter tag=ml --filter tag=finance --filter source_type=web` means: "uploads tagged with ml OR finance, AND source type is web."
+
+---
+
+### V3.5 CLI Command Changes
+
+#### V3.5.1 New `src/commands/tag.ts`
+
+**New file**: `src/commands/tag.ts`
+
+```typescript
+import { Command } from 'commander';
+import { updateTags } from '../operations/metadata-ops.js';
+import { getWorkspace } from '../services/registry.js';
+
+/**
+ * Register the tag command for managing tags on existing uploads.
+ */
+export function registerTagCommand(program: Command): void {
+  program
+    .command('tag')
+    .argument('<workspace>', 'Workspace name')
+    .argument('<upload-id>', 'Upload UUID')
+    .option('--add <tags...>', 'Tags to add')
+    .option('--remove <tags...>', 'Tags to remove')
+    .option('--list', 'Display current tags')
+    .description('Add, remove, or list tags on an upload')
+    .action(
+      (
+        workspace: string,
+        uploadId: string,
+        options: { add?: string[]; remove?: string[]; list?: boolean }
+      ) => {
+        try {
+          if (!options.add && !options.remove && !options.list) {
+            throw new Error(
+              'At least one of --add, --remove, or --list must be provided'
+            );
+          }
+
+          if (options.list) {
+            const ws = getWorkspace(workspace);
+            const upload = ws.uploads[uploadId];
+            if (!upload) {
+              throw new Error(
+                `Upload '${uploadId}' not found in workspace '${workspace}'`
+              );
+            }
+            const tags = upload.tags ?? [];
+            if (tags.length === 0) {
+              console.log('No tags.');
+            } else {
+              console.log(`Tags: [${tags.join(', ')}]`);
+            }
+            return;
+          }
+
+          const currentTags = updateTags(
+            workspace,
+            uploadId,
+            options.add,
+            options.remove
+          );
+          console.log(`Tags updated: [${currentTags.join(', ')}]`);
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          console.error(`Error: ${message}`);
+          process.exit(1);
+        }
+      }
+    );
+}
+```
+
+#### V3.5.2 `upload` command -- add `--tag` option
+
+**File**: `src/commands/upload.ts`
+
+Add the `--tag` option after `--with-notes` (line 22), and import `validateTags`:
+
+```typescript
+import { validateTags } from '../utils/validation.js';
+
+// Inside registerUploadCommand, after .option('--with-notes', ...):
+.option('--tag <tag>', 'Tag to attach (repeatable)', (val: string, prev: string[]) => [...prev, val], [] as string[])
+```
+
+In the action handler, validate and pass tags:
+
+```typescript
+.action(async (workspace: string, options: UploadOptions) => {
+  try {
+    // ... existing source validation ...
+
+    const tags = options.tag && options.tag.length > 0
+      ? validateTags(options.tag)
+      : undefined;
+
+    const ctx = createContext();
+    let result;
+
+    if (options.file) {
+      result = await uploadFile(ctx, workspace, options.file, tags);
+    } else if (options.url) {
+      result = await uploadUrl(ctx, workspace, options.url, tags);
+    } else if (options.youtube) {
+      result = await uploadYoutube(ctx, workspace, options.youtube, !!options.withNotes, tags);
+    } else if (options.note) {
+      result = await uploadNote(ctx, workspace, options.note, tags);
+    } else {
+      throw new Error('One of --file, --url, --youtube, or --note must be provided');
+    }
+
+    console.log(`Uploaded: ${result.title} (ID: ${result.id})`);
+  } catch (error) { ... }
+});
+```
+
+#### V3.5.3 `channel-scan` command -- add `--tag` option
+
+**File**: `src/commands/channel-scan.ts`
+
+Add after `.option('--continue-on-error', ...)`:
+
+```typescript
+import { validateTags } from '../utils/validation.js';
+
+// In command definition:
+.option('--tag <tag>', 'Tag to attach to all uploads (repeatable)', (val: string, prev: string[]) => [...prev, val], [] as string[])
+```
+
+In the action handler, validate and pass tags:
+
+```typescript
+const tags = options.tag && options.tag.length > 0
+  ? validateTags(options.tag)
+  : undefined;
+
+const { videos, result } = await channelScan(
+  ctx,
+  workspace,
+  options.channel,
+  options.from,
+  options.to,
+  {
+    withNotes: options.withNotes,
+    dryRun: options.dryRun,
+    maxVideos: options.maxVideos,
+    continueOnError: options.continueOnError,
+    tags,                                   // <-- NEW
+  },
+  { ... }
+);
+```
+
+#### V3.5.4 `cli.ts` -- register tag command
+
+**File**: `src/cli.ts`
+
+```typescript
+import { registerTagCommand } from './commands/tag.js';
+
+// After registerChannelScanCommand(program):
+registerTagCommand(program);
+```
+
+---
+
+### V3.6 IPC Layer Changes
+
+#### V3.6.1 `IpcChannelMap` updates
+
+**File**: `electron-ui/src/shared/ipc-types.ts`
+
+Add `tags?: string[]` to all upload channel inputs:
+
+```typescript
+'upload:file': {
+  input: { workspace: string; filePath: string; tags?: string[] };
+  output: UploadResultIpc;
+};
+'upload:url': {
+  input: { workspace: string; url: string; tags?: string[] };
+  output: UploadResultIpc;
+};
+'upload:youtube': {
+  input: { workspace: string; url: string; withNotes: boolean; tags?: string[] };
+  output: UploadResultIpc;
+};
+'upload:note': {
+  input: { workspace: string; text: string; tags?: string[] };
+  output: UploadResultIpc;
+};
+'youtube:channelScan': {
+  input: { workspace: string; channel: string; fromDate: string; toDate: string; withNotes: boolean; tags?: string[] };
+  output: { uploaded: number; failed: number; errors: string[] };
+};
+```
+
+Add new channel for tag management:
+
+```typescript
+'upload:updateTags': {
+  input: { workspace: string; uploadId: string; add?: string[]; remove?: string[] };
+  output: string[];
+};
+```
+
+#### V3.6.2 IPC Handlers
+
+**File**: `electron-ui/src/main/ipc-handlers.ts`
+
+Import `updateTags`:
+
+```typescript
+import {
+  updateTags,
+} from '@cli/operations/metadata-ops.js';
+```
+
+Update existing upload handlers to pass `input.tags`:
+
+```typescript
+// --- upload:file ---
+ipcMain.handle(
+  'upload:file',
+  (_event, input: { workspace: string; filePath: string; tags?: string[] }) =>
+    wrap<UploadResultIpc>(async () => {
+      const ctx = getContext();
+      return uploadFile(ctx, input.workspace, input.filePath, input.tags);
+    })
+);
+
+// --- upload:url ---
+ipcMain.handle(
+  'upload:url',
+  (_event, input: { workspace: string; url: string; tags?: string[] }) =>
+    wrap<UploadResultIpc>(async () => {
+      const ctx = getContext();
+      return uploadUrl(ctx, input.workspace, input.url, input.tags);
+    })
+);
+
+// --- upload:youtube ---
+ipcMain.handle(
+  'upload:youtube',
+  (_event, input: { workspace: string; url: string; withNotes: boolean; tags?: string[] }) =>
+    wrap<UploadResultIpc>(async () => {
+      const ctx = getContext();
+      return uploadYoutube(ctx, input.workspace, input.url, input.withNotes, input.tags);
+    })
+);
+
+// --- upload:note ---
+ipcMain.handle(
+  'upload:note',
+  (_event, input: { workspace: string; text: string; tags?: string[] }) =>
+    wrap<UploadResultIpc>(async () => {
+      const ctx = getContext();
+      return uploadNote(ctx, input.workspace, input.text, input.tags);
+    })
+);
+```
+
+Update the `youtube:channelScan` handler to pass `input.tags`:
+
+```typescript
+// --- youtube:channelScan ---
+ipcMain.handle(
+  'youtube:channelScan',
+  (
+    _event,
+    input: {
+      workspace: string;
+      channel: string;
+      fromDate: string;
+      toDate: string;
+      withNotes: boolean;
+      tags?: string[];
+    }
+  ) =>
+    wrap<{ uploaded: number; failed: number; errors: string[] }>(async () => {
+      const ctx = getContext();
+      const { result } = await channelScan(
+        ctx,
+        input.workspace,
+        input.channel,
+        input.fromDate,
+        input.toDate,
+        {
+          withNotes: input.withNotes,
+          continueOnError: true,
+          tags: input.tags,                  // <-- NEW
+        },
+        { /* progress callbacks unchanged */ }
+      );
+      return {
+        uploaded: result.uploaded,
+        failed: result.failed,
+        errors: result.errors.map((e) => `${e.title}: ${e.error}`),
+      };
+    })
+);
+```
+
+Add new handler for `upload:updateTags`:
+
+```typescript
+// --- upload:updateTags ---
+ipcMain.handle(
+  'upload:updateTags',
+  (
+    _event,
+    input: { workspace: string; uploadId: string; add?: string[]; remove?: string[] }
+  ) =>
+    wrap<string[]>(() =>
+      updateTags(input.workspace, input.uploadId, input.add, input.remove)
+    )
+);
+```
+
+#### V3.6.3 Preload API Bridge
+
+**File**: `electron-ui/src/preload/api.ts`
+
+Update upload methods to accept `tags`:
+
+```typescript
+export const api = {
+  // ... config, workspace unchanged ...
+  upload: {
+    // ... list, getContent, download unchanged ...
+    uploadFile: (
+      workspace: string,
+      filePath: string,
+      tags?: string[]                       // <-- NEW
+    ): Promise<IpcResult<UploadResultIpc>> =>
+      ipcRenderer.invoke('upload:file', { workspace, filePath, tags }),
+    uploadUrl: (
+      workspace: string,
+      url: string,
+      tags?: string[]                       // <-- NEW
+    ): Promise<IpcResult<UploadResultIpc>> =>
+      ipcRenderer.invoke('upload:url', { workspace, url, tags }),
+    uploadYoutube: (
+      workspace: string,
+      url: string,
+      withNotes: boolean,
+      tags?: string[]                       // <-- NEW
+    ): Promise<IpcResult<UploadResultIpc>> =>
+      ipcRenderer.invoke('upload:youtube', { workspace, url, withNotes, tags }),
+    uploadNote: (
+      workspace: string,
+      text: string,
+      tags?: string[]                       // <-- NEW
+    ): Promise<IpcResult<UploadResultIpc>> =>
+      ipcRenderer.invoke('upload:note', { workspace, text, tags }),
+    deleteUpload: (
+      workspace: string,
+      uploadId: string
+    ): Promise<IpcResult<void>> =>
+      ipcRenderer.invoke('upload:delete', { workspace, uploadId }),
+    updateTags: (                            // <-- NEW method
+      workspace: string,
+      uploadId: string,
+      add?: string[],
+      remove?: string[]
+    ): Promise<IpcResult<string[]>> =>
+      ipcRenderer.invoke('upload:updateTags', { workspace, uploadId, add, remove }),
+  },
+  // ... query, youtube (add tags to channelScan) ...
+  youtube: {
+    // ... getTranscript, getNotes, getDescription unchanged ...
+    channelScan: (
+      workspace: string,
+      channel: string,
+      fromDate: string,
+      toDate: string,
+      withNotes: boolean,
+      tags?: string[]                       // <-- NEW
+    ): Promise<IpcResult<{ uploaded: number; failed: number; errors: string[] }>> =>
+      ipcRenderer.invoke('youtube:channelScan', { workspace, channel, fromDate, toDate, withNotes, tags }),
+  },
+  // ... dialog, shell unchanged ...
+}
+```
+
+**Note**: `electron-ui/src/preload/index.d.ts` uses `typeof import('./api').api` so it auto-derives from the preload API -- no changes needed.
+
+---
+
+### V3.7 Electron UI Components
+
+#### V3.7.1 `TagInput.tsx` -- Reusable Tag Input Component
+
+**New file**: `electron-ui/src/renderer/src/components/TagInput.tsx`
+
+```typescript
+import { useState, useCallback, type KeyboardEvent, type ChangeEvent } from "react"
+import { X } from "lucide-react"
+import { Badge } from "./ui/badge"
+import { Input } from "./ui/input"
+
+export interface TagInputProps {
+  /** Current tags array */
+  tags: string[]
+  /** Called when tags change (add or remove) */
+  onChange: (tags: string[]) => void
+  /** Disable input and remove buttons */
+  disabled?: boolean
+  /** Placeholder text for the input */
+  placeholder?: string
+}
+
+export function TagInput({
+  tags,
+  onChange,
+  disabled = false,
+  placeholder = "Add tag...",
+}: TagInputProps) {
+  const [input, setInput] = useState("")
+  const [error, setError] = useState<string | null>(null)
+
+  const addTag = useCallback(
+    (raw: string) => {
+      const tag = raw.trim().toLowerCase()
+      setError(null)
+
+      if (tag.length === 0) return
+
+      if (tag.includes("=")) {
+        setError("Tags cannot contain '='")
+        return
+      }
+
+      if (tag.length > 50) {
+        setError("Tags must be 50 characters or less")
+        return
+      }
+
+      if (tags.includes(tag)) {
+        setInput("")
+        return // silently deduplicate
+      }
+
+      onChange([...tags, tag])
+      setInput("")
+    },
+    [tags, onChange]
+  )
+
+  const removeTag = useCallback(
+    (tagToRemove: string) => {
+      onChange(tags.filter((t) => t !== tagToRemove))
+    },
+    [tags, onChange]
+  )
+
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter" || e.key === ",") {
+        e.preventDefault()
+        addTag(input)
+      }
+      if (e.key === "Backspace" && input === "" && tags.length > 0) {
+        onChange(tags.slice(0, -1))
+      }
+    },
+    [input, tags, addTag, onChange]
+  )
+
+  const handleChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    // Strip commas from pasted text
+    setInput(e.target.value.replace(/,/g, ""))
+    setError(null)
+  }, [])
+
+  return (
+    <div className="space-y-1.5">
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {tags.map((tag) => (
+            <Badge key={tag} variant="secondary" className="gap-1 text-xs">
+              {tag}
+              {!disabled && (
+                <X
+                  className="h-3 w-3 cursor-pointer hover:text-destructive"
+                  onClick={() => removeTag(tag)}
+                />
+              )}
+            </Badge>
+          ))}
+        </div>
+      )}
+      <Input
+        value={input}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        disabled={disabled}
+        className="h-8 text-xs"
+      />
+      {error && (
+        <p className="text-xs text-destructive">{error}</p>
+      )}
+    </div>
+  )
+}
+```
+
+**Component behavior**:
+- Enter or comma adds the current input as a tag (normalized to lowercase)
+- Backspace on empty input removes the last tag
+- Click X on a badge removes that tag
+- Commas are stripped from pasted text
+- Inline validation: rejects empty, `=`, >50 chars with flash error message
+- Duplicates are silently ignored
+
+#### V3.7.2 `AddContentDialog.tsx` -- Tag Input in Each Tab
+
+**File**: `electron-ui/src/renderer/src/components/AddContentDialog.tsx`
+
+Add shared tag state and TagInput to all 5 tabs:
+
+```typescript
+import { TagInput } from "./TagInput"
+
+// Inside the component, add state:
+const [tags, setTags] = useState<string[]>([])
+
+// Clear tags on dialog close and after successful upload:
+// In the dialog onOpenChange handler and success effect:
+setTags([])
+
+// Add <TagInput> at the bottom of each tab panel (File, Web Page, YouTube, Channel Scan, Note):
+<div className="space-y-1.5">
+  <label className="text-sm font-medium">Tags</label>
+  <TagInput tags={tags} onChange={setTags} disabled={isUploading} />
+</div>
+```
+
+Pass tags to each upload action call:
+
+```typescript
+// File tab:
+uploadFile(filePath, tags)
+
+// Web Page tab:
+uploadUrl(url, tags)
+
+// YouTube tab:
+uploadYoutube(url, withNotes, tags)
+
+// Note tab:
+uploadNote(text, tags)
+
+// Channel Scan tab:
+channelScan(channel, fromDate, toDate, withNotes, tags)
+```
+
+#### V3.7.3 `UploadDetail.tsx` -- Tag Display and Inline Editing
+
+**File**: `electron-ui/src/renderer/src/components/UploadDetail.tsx`
+
+Add a tags section in the metadata area (after the Flags display, around line 351):
+
+```tsx
+import { TagInput } from "./TagInput"
+
+// Inside the metadata section, after the Flags row:
+<div className="flex items-start gap-2">
+  <span className="w-28 shrink-0 font-medium text-muted-foreground pt-1">Tags</span>
+  <div className="flex-1">
+    <TagInput
+      tags={selectedUpload.tags ?? []}
+      onChange={async (newTags) => {
+        // Determine what was added and removed
+        const currentTags = selectedUpload.tags ?? []
+        const added = newTags.filter((t) => !currentTags.includes(t))
+        const removed = currentTags.filter((t) => !newTags.includes(t))
+
+        if (added.length === 0 && removed.length === 0) return
+
+        const result = await updateTags(
+          selectedWorkspace!,
+          selectedUpload.id,
+          added.length > 0 ? added : undefined,
+          removed.length > 0 ? removed : undefined
+        )
+        if (result) {
+          // Update the local selectedUpload to reflect changes
+          // (refresh from store or update inline)
+        }
+      }}
+    />
+  </div>
+</div>
+```
+
+#### V3.7.4 `UploadsFilterBar.tsx` -- Tag Filter Input
+
+**File**: `electron-ui/src/renderer/src/components/UploadsFilterBar.tsx`
+
+Add a tag text input after the Channel input (following the same debounce pattern):
+
+```tsx
+// Add ref for debounce:
+const tagDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+const updateTagFilter = (value: string) => {
+  if (tagDebounce.current) clearTimeout(tagDebounce.current)
+  tagDebounce.current = setTimeout(() => {
+    updateFilter("tag", value)
+  }, 400)
+}
+
+// In the JSX, after the Channel input:
+<Input
+  placeholder="Tag..."
+  defaultValue={getFilterValue("tag")}
+  onChange={(e) => updateTagFilter(e.target.value)}
+  className="w-28 h-8 text-xs"
+/>
+```
+
+**Note**: The filter bar uses a single tag text input (not a multi-tag input) because it maps to the existing `updateFilter` mechanism which creates one `{key: "tag", value: "..."}` entry. For filtering by multiple tags simultaneously, the user can type comma-separated values and the filter logic splits them, or a future enhancement adds multi-tag filter UI.
+
+#### V3.7.5 `QueryFilterPanel.tsx` -- Tag Filter
+
+**File**: `electron-ui/src/renderer/src/components/QueryFilterPanel.tsx`
+
+Add tag filter state and input in the client-side filters section:
+
+```tsx
+// Add state:
+const [tagFilter, setTagFilter] = useState("")
+
+// Update hasActiveFilters:
+const hasActiveFilters =
+  sourceType !== "all" ||
+  sourceUrl.trim() !== "" ||
+  flagFilter !== "all" ||
+  expirationStatus !== "all" ||
+  tagFilter.trim() !== ""                   // <-- NEW
+
+// In buildFilters:
+if (tagFilter.trim()) {
+  clientFilters.push({ key: "tag", value: tagFilter.trim() })
+}
+
+// In resetFilters:
+setTagFilter("")
+
+// In the client-side filters grid (add a third column or new row):
+<div className="space-y-1.5">
+  <label className="text-xs font-medium">Tag</label>
+  <Input
+    className="h-9"
+    placeholder="e.g., ml"
+    value={tagFilter}
+    onChange={(e) => setTagFilter(e.target.value)}
+  />
+</div>
+```
+
+Update the `buildFilters` and `resetFilters` dependency arrays to include `tagFilter`.
+
+#### V3.7.6 `columns.tsx` -- Tags Column
+
+**File**: `electron-ui/src/renderer/src/components/uploads-table/columns.tsx`
+
+Add `tags?: string[]` to the local `UploadEntry` interface:
+
+```typescript
+export interface UploadEntry {
+  id: string
+  documentName: string
+  title: string
+  timestamp: string
+  sourceType: "file" | "web" | "youtube" | "note"
+  sourceUrl: string | null
+  expirationDate: string | null
+  flags: ("completed" | "urgent" | "inactive")[]
+  tags?: string[]                           // <-- NEW
+  channelTitle?: string
+  publishedAt?: string
+}
+```
+
+Add a "Tags" column after the "Flags" column (after the flags column definition, before `expirationDate`):
+
+```typescript
+{
+  accessorKey: "tags",
+  header: "Tags",
+  cell: ({ row }) => {
+    const tags = row.getValue<string[] | undefined>("tags")
+    if (!tags || tags.length === 0) return null
+    return (
+      <div className="flex flex-wrap gap-1">
+        {tags.map((tag) => (
+          <Badge key={tag} variant="outline" className="text-xs">
+            {tag}
+          </Badge>
+        ))}
+      </div>
+    )
+  },
+  enableSorting: false,
+},
+```
+
+Tags use `variant="outline"` to visually distinguish them from flags (which use `variant="destructive"` / `"secondary"` / `"outline"` based on type).
+
+#### V3.7.7 `store/index.ts` -- Updated Action Signatures
+
+**File**: `electron-ui/src/renderer/src/store/index.ts`
+
+Add `tags?: string[]` to the local `UploadEntry` interface:
+
+```typescript
+export interface UploadEntry {
+  id: string
+  documentName: string
+  title: string
+  timestamp: string
+  sourceType: SourceType
+  sourceUrl: string | null
+  expirationDate: string | null
+  flags: Flag[]
+  tags?: string[]                           // <-- NEW
+  channelTitle?: string
+  publishedAt?: string
+}
+```
+
+Update the `AppStore` interface upload action signatures:
+
+```typescript
+// Upload operations
+uploadFile: (filePath: string, tags?: string[]) => Promise<boolean>
+uploadUrl: (url: string, tags?: string[]) => Promise<boolean>
+uploadYoutube: (url: string, withNotes: boolean, tags?: string[]) => Promise<boolean>
+uploadNote: (text: string, tags?: string[]) => Promise<boolean>
+channelScan: (channel: string, fromDate: string, toDate: string, withNotes: boolean, tags?: string[]) => Promise<{ success: boolean; uploaded?: number; failed?: number; errors?: string[] }>
+
+// NEW action:
+updateTags: (uploadId: string, add?: string[], remove?: string[]) => Promise<string[] | null>
+```
+
+Update each implementation to pass tags through:
+
+```typescript
+uploadFile: async (filePath: string, tags?: string[]) => {
+  // ... existing boilerplate ...
+  const result = await api.upload.uploadFile(selectedWorkspace, filePath, tags)
+  // ... rest unchanged ...
+},
+
+uploadUrl: async (url: string, tags?: string[]) => {
+  // ... existing boilerplate ...
+  const result = await api.upload.uploadUrl(selectedWorkspace, url, tags)
+  // ... rest unchanged ...
+},
+
+uploadYoutube: async (url: string, withNotes: boolean, tags?: string[]) => {
+  // ... existing boilerplate ...
+  const result = await api.upload.uploadYoutube(selectedWorkspace, url, withNotes, tags)
+  // ... rest unchanged ...
+},
+
+uploadNote: async (text: string, tags?: string[]) => {
+  // ... existing boilerplate ...
+  const result = await api.upload.uploadNote(selectedWorkspace, text, tags)
+  // ... rest unchanged ...
+},
+
+channelScan: async (channel: string, fromDate: string, toDate: string, withNotes: boolean, tags?: string[]) => {
+  // ... existing boilerplate ...
+  const result = await api.youtube.channelScan(selectedWorkspace, channel, fromDate, toDate, withNotes, tags)
+  // ... rest unchanged ...
+},
+```
+
+Add new `updateTags` action:
+
+```typescript
+updateTags: async (uploadId: string, add?: string[], remove?: string[]) => {
+  const { selectedWorkspace } = get()
+  if (!selectedWorkspace) return null
+  try {
+    const api = getApi()
+    const result = await api.upload.updateTags(selectedWorkspace, uploadId, add, remove)
+    if (result.success) {
+      // Refresh uploads list to reflect changes
+      await get().loadUploads()
+      return result.data
+    }
+    return null
+  } catch {
+    return null
+  }
+},
+```
+
+---
+
+### V3.8 Registry Changes
+
+#### V3.8.1 `updateUpload` Pick type extension
+
+**File**: `src/services/registry.ts`, line 163-191
+
+Extend the `updates` parameter type to include `'tags'`:
+
+```typescript
+// BEFORE:
+export function updateUpload(
+  workspaceName: string,
+  uploadId: string,
+  updates: Partial<Pick<UploadEntry, 'title' | 'expirationDate' | 'flags'>>
+): void {
+
+// AFTER:
+export function updateUpload(
+  workspaceName: string,
+  uploadId: string,
+  updates: Partial<Pick<UploadEntry, 'title' | 'expirationDate' | 'flags' | 'tags'>>
+): void {
+```
+
+Add handling block after the `flags` block:
+
+```typescript
+if (updates.flags !== undefined) {
+  upload.flags = updates.flags;
+}
+// NEW:
+if (updates.tags !== undefined) {
+  upload.tags = updates.tags;
+}
+```
+
+#### V3.8.2 Backward Compatibility
+
+Existing registry entries created before this feature will have `tags: undefined`. The convention used throughout the codebase (matching `channelTitle?`, `publishedAt?`) is to handle this at the point of use with `(upload.tags ?? [])`. No centralized migration is needed.
+
+Points where `tags ?? []` must be applied:
+- `applyFilters` in `src/utils/filters.ts`
+- `passesClientFilters` in `src/utils/filters.ts`
+- `updateTags` in `src/operations/metadata-ops.ts`
+- `getLabels` in `src/operations/metadata-ops.ts`
+- `performUpload` in `src/operations/upload-ops.ts` (sets `tags: tags ?? []`)
+- `channelScan` in `src/operations/youtube-ops.ts` (sets `tags: options.tags ?? []`)
+- All Electron UI components that render tags
+
+---
+
+### V3.9 Interface Contracts Between Units
+
+This section defines the exact function signatures that form the boundaries between implementation units. These contracts enable parallel development of CLI commands and IPC handlers against the same operations layer.
+
+#### V3.9.1 Validation Contract
+
+```typescript
+// src/utils/validation.ts
+
+/**
+ * Validate, normalize, and deduplicate tags.
+ * @throws Error if any tag is empty, contains '=', or exceeds 50 chars
+ */
+export function validateTags(tags: string[]): string[];
+```
+
+#### V3.9.2 Operations Contracts
+
+```typescript
+// src/operations/upload-ops.ts
+
+export async function uploadFile(
+  ctx: AppContext, workspace: string, filePath: string, tags?: string[]
+): Promise<UploadResult>;
+
+export async function uploadUrl(
+  ctx: AppContext, workspace: string, url: string, tags?: string[]
+): Promise<UploadResult>;
+
+export async function uploadYoutube(
+  ctx: AppContext, workspace: string, url: string, withNotes: boolean, tags?: string[]
+): Promise<UploadResult>;
+
+export async function uploadNote(
+  ctx: AppContext, workspace: string, text: string, tags?: string[]
+): Promise<UploadResult>;
+```
+
+```typescript
+// src/operations/metadata-ops.ts
+
+/**
+ * Add or remove tags on an upload. Returns the updated tags array.
+ * @throws Error if neither add nor remove is provided
+ * @throws Error if upload not found
+ * @throws Error if any tag is invalid (via validateTags)
+ */
+export function updateTags(
+  workspace: string, uploadId: string, add?: string[], remove?: string[]
+): string[];
+
+/**
+ * List all distinct metadata labels used in a workspace.
+ * Now includes 'tags' when any upload has tags.
+ */
+export function getLabels(workspace: string): string[];
+```
+
+```typescript
+// src/operations/youtube-ops.ts
+
+export async function channelScan(
+  ctx: AppContext,
+  workspace: string,
+  channel: string,
+  fromDate: string,
+  toDate: string,
+  options: {
+    withNotes?: boolean;
+    dryRun?: boolean;
+    maxVideos?: number;
+    continueOnError?: boolean;
+    tags?: string[];                        // <-- NEW
+  },
+  progress?: ChannelScanProgress
+): Promise<{ channelTitle: string; videos: YouTubeVideoMetadata[]; result: ChannelScanResult }>;
+```
+
+#### V3.9.3 Registry Contract
+
+```typescript
+// src/services/registry.ts
+
+export function updateUpload(
+  workspaceName: string,
+  uploadId: string,
+  updates: Partial<Pick<UploadEntry, 'title' | 'expirationDate' | 'flags' | 'tags'>>
+): void;
+```
+
+#### V3.9.4 Filter Contracts
+
+```typescript
+// src/utils/filters.ts
+
+export function parseListingFilter(filterStr: string): { key: string; value: string };
+// Now accepts 'tag' as a valid key
+
+export function applyFilters(
+  uploads: UploadEntry[], filters: { key: string; value: string }[]
+): UploadEntry[];
+// Tag filters use OR logic within group, AND with other filters
+
+export function passesClientFilters(
+  upload: UploadEntry | undefined, clientFilters: ParsedFilter[]
+): boolean;
+// Tag filters use OR logic within group, AND with other filters
+```
+
+#### V3.9.5 IPC Contracts
+
+```typescript
+// electron-ui/src/shared/ipc-types.ts -- IpcChannelMap additions/changes
+
+'upload:file':       { input: { workspace: string; filePath: string; tags?: string[] }; output: UploadResultIpc }
+'upload:url':        { input: { workspace: string; url: string; tags?: string[] }; output: UploadResultIpc }
+'upload:youtube':    { input: { workspace: string; url: string; withNotes: boolean; tags?: string[] }; output: UploadResultIpc }
+'upload:note':       { input: { workspace: string; text: string; tags?: string[] }; output: UploadResultIpc }
+'youtube:channelScan': { input: { workspace: string; channel: string; fromDate: string; toDate: string; withNotes: boolean; tags?: string[] }; output: { uploaded: number; failed: number; errors: string[] } }
+'upload:updateTags': { input: { workspace: string; uploadId: string; add?: string[]; remove?: string[] }; output: string[] }
+```
+
+#### V3.9.6 Preload API Contract
+
+```typescript
+// electron-ui/src/preload/api.ts
+
+upload: {
+  uploadFile: (workspace: string, filePath: string, tags?: string[]) => Promise<IpcResult<UploadResultIpc>>
+  uploadUrl: (workspace: string, url: string, tags?: string[]) => Promise<IpcResult<UploadResultIpc>>
+  uploadYoutube: (workspace: string, url: string, withNotes: boolean, tags?: string[]) => Promise<IpcResult<UploadResultIpc>>
+  uploadNote: (workspace: string, text: string, tags?: string[]) => Promise<IpcResult<UploadResultIpc>>
+  updateTags: (workspace: string, uploadId: string, add?: string[], remove?: string[]) => Promise<IpcResult<string[]>>
+}
+youtube: {
+  channelScan: (workspace: string, channel: string, fromDate: string, toDate: string, withNotes: boolean, tags?: string[]) => Promise<IpcResult<{ uploaded: number; failed: number; errors: string[] }>>
+}
+```
+
+#### V3.9.7 Zustand Store Contract
+
+```typescript
+// electron-ui/src/renderer/src/store/index.ts
+
+export interface AppStore {
+  // ... existing fields ...
+
+  // Updated upload actions (tags parameter added):
+  uploadFile: (filePath: string, tags?: string[]) => Promise<boolean>
+  uploadUrl: (url: string, tags?: string[]) => Promise<boolean>
+  uploadYoutube: (url: string, withNotes: boolean, tags?: string[]) => Promise<boolean>
+  uploadNote: (text: string, tags?: string[]) => Promise<boolean>
+  channelScan: (channel: string, fromDate: string, toDate: string, withNotes: boolean, tags?: string[]) => Promise<{ success: boolean; uploaded?: number; failed?: number; errors?: string[] }>
+
+  // New action:
+  updateTags: (uploadId: string, add?: string[], remove?: string[]) => Promise<string[] | null>
+}
+```
+
+---
+
+### V3.10 ADR: Tag Storage and Filter Strategy
+
+#### ADR-33: Tags Stored in Both Local Registry and Gemini Metadata
+
+**Decision**: Store tags in both the local JSON registry (`tags: string[]` on `UploadEntry`) and Gemini custom metadata (`{ key: 'tags', stringListValue: { values: [...] } }`).
+
+**Context**: Unlike flags (which are mutable and stored only locally), tags are set at upload time and can also be modified later. The Gemini `stringListValue` type is supported in the custom metadata API.
+
+**Rationale**:
+- Local registry storage enables fast client-side filtering without Gemini API calls
+- Gemini-side storage enables future server-side tag filtering if Gemini adds `stringListValue` to the AIP-160 filter syntax
+- Tags set at upload time are stored in both locations; post-upload tag modifications update only the local registry (Gemini documents are immutable after upload)
+- The approach aligns with the existing dual-storage pattern for `source_type` and `source_url`
+
+**Consequences**:
+- Tags modified after upload (via `updateTags`) will differ between local registry and Gemini metadata
+- The local registry remains the authoritative source for current tags
+- Gemini-side tags represent the tags at upload time only
+
+#### ADR-34: OR Logic for Tag Filters
+
+**Decision**: When multiple `tag=` filters are specified, an upload passes if it has ANY of the specified tags (OR logic). The tag group is ANDed with all other filter groups.
+
+**Context**: The existing filter architecture uses AND logic exclusively. Tags require a different semantic because users typically want to see "uploads tagged ml OR finance" rather than "uploads tagged ml AND finance."
+
+**Rationale**:
+- OR logic is more intuitive for tag-based browsing and discovery
+- Pre-grouping approach isolates the OR logic from the existing AND loop
+- Consistent with how tag filters work in common tools (GitHub issues, Stack Overflow, etc.)
+
+**Consequences**:
+- The filter code has a special case for the `tag` key (pre-grouping before the AND loop)
+- Future filter keys that need OR logic can follow the same pre-grouping pattern
+- The interaction is predictable: `--filter tag=ml --filter tag=finance --filter source_type=web` means "(ml OR finance) AND web"

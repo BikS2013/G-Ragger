@@ -163,7 +163,7 @@ export function removeUpload(workspaceName: string, uploadId: string): void {
 export function updateUpload(
   workspaceName: string,
   uploadId: string,
-  updates: Partial<Pick<UploadEntry, 'title' | 'expirationDate' | 'flags'>>
+  updates: Partial<Pick<UploadEntry, 'title' | 'expirationDate' | 'flags' | 'tags'>>
 ): void {
   const registry = loadRegistry();
 
@@ -185,6 +185,9 @@ export function updateUpload(
   }
   if (updates.flags !== undefined) {
     upload.flags = updates.flags;
+  }
+  if (updates.tags !== undefined) {
+    upload.tags = updates.tags;
   }
 
   saveRegistry(registry);

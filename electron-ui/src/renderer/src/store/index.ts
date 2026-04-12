@@ -16,6 +16,7 @@ export interface UploadEntry {
   flags: Flag[]
   channelTitle?: string
   publishedAt?: string
+  tags?: string[]
 }
 
 export interface WorkspaceSummary {
@@ -96,11 +97,11 @@ export interface AppStore {
   // Upload operations
   isUploading: boolean
   uploadError: string | null
-  uploadFile: (filePath: string) => Promise<boolean>
-  uploadUrl: (url: string) => Promise<boolean>
-  uploadYoutube: (url: string, withNotes: boolean) => Promise<boolean>
-  uploadNote: (text: string) => Promise<boolean>
-  channelScan: (channel: string, fromDate: string, toDate: string, withNotes: boolean) => Promise<{ success: boolean; uploaded?: number; failed?: number; errors?: string[] }>
+  uploadFile: (filePath: string, tags?: string[]) => Promise<boolean>
+  uploadUrl: (url: string, tags?: string[]) => Promise<boolean>
+  uploadYoutube: (url: string, withNotes: boolean, tags?: string[]) => Promise<boolean>
+  uploadNote: (text: string, tags?: string[]) => Promise<boolean>
+  channelScan: (channel: string, fromDate: string, toDate: string, withNotes: boolean, tags?: string[]) => Promise<{ success: boolean; uploaded?: number; failed?: number; errors?: string[] }>
   clearUploadError: () => void
 
   // UI
@@ -343,7 +344,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   // Upload operations
   isUploading: false,
   uploadError: null,
-  uploadFile: async (filePath: string) => {
+  uploadFile: async (filePath: string, tags?: string[]) => {
     const { selectedWorkspace } = get()
     if (!selectedWorkspace) {
       set({ uploadError: "No workspace selected" })
@@ -352,7 +353,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ isUploading: true, uploadError: null })
     try {
       const api = getApi()
-      const result = await api.upload.uploadFile(selectedWorkspace, filePath)
+      const result = await api.upload.uploadFile(selectedWorkspace, filePath, tags)
       if (result.success) {
         set({ isUploading: false })
         await get().loadUploads()
@@ -370,7 +371,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       return false
     }
   },
-  uploadUrl: async (url: string) => {
+  uploadUrl: async (url: string, tags?: string[]) => {
     const { selectedWorkspace } = get()
     if (!selectedWorkspace) {
       set({ uploadError: "No workspace selected" })
@@ -379,7 +380,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ isUploading: true, uploadError: null })
     try {
       const api = getApi()
-      const result = await api.upload.uploadUrl(selectedWorkspace, url)
+      const result = await api.upload.uploadUrl(selectedWorkspace, url, tags)
       if (result.success) {
         set({ isUploading: false })
         await get().loadUploads()
@@ -397,7 +398,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       return false
     }
   },
-  uploadYoutube: async (url: string, withNotes: boolean) => {
+  uploadYoutube: async (url: string, withNotes: boolean, tags?: string[]) => {
     const { selectedWorkspace } = get()
     if (!selectedWorkspace) {
       set({ uploadError: "No workspace selected" })
@@ -406,7 +407,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ isUploading: true, uploadError: null })
     try {
       const api = getApi()
-      const result = await api.upload.uploadYoutube(selectedWorkspace, url, withNotes)
+      const result = await api.upload.uploadYoutube(selectedWorkspace, url, withNotes, tags)
       if (result.success) {
         set({ isUploading: false })
         await get().loadUploads()
@@ -424,7 +425,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       return false
     }
   },
-  uploadNote: async (text: string) => {
+  uploadNote: async (text: string, tags?: string[]) => {
     const { selectedWorkspace } = get()
     if (!selectedWorkspace) {
       set({ uploadError: "No workspace selected" })
@@ -433,7 +434,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ isUploading: true, uploadError: null })
     try {
       const api = getApi()
-      const result = await api.upload.uploadNote(selectedWorkspace, text)
+      const result = await api.upload.uploadNote(selectedWorkspace, text, tags)
       if (result.success) {
         set({ isUploading: false })
         await get().loadUploads()
@@ -451,7 +452,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       return false
     }
   },
-  channelScan: async (channel: string, fromDate: string, toDate: string, withNotes: boolean) => {
+  channelScan: async (channel: string, fromDate: string, toDate: string, withNotes: boolean, tags?: string[]) => {
     const { selectedWorkspace } = get()
     if (!selectedWorkspace) {
       set({ uploadError: "No workspace selected" })
@@ -460,7 +461,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ isUploading: true, uploadError: null })
     try {
       const api = getApi()
-      const result = await api.youtube.channelScan(selectedWorkspace, channel, fromDate, toDate, withNotes)
+      const result = await api.youtube.channelScan(selectedWorkspace, channel, fromDate, toDate, withNotes, tags)
       if (result.success) {
         set({ isUploading: false })
         await get().loadUploads()

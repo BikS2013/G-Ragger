@@ -389,3 +389,50 @@ An "Add Content" button in the UploadsTab (disabled when no workspace is selecte
 The File tab uses a native Electron file picker (via a separate `dialog:openFile` IPC channel) to select a local file, displaying the filename before upload. The Web Page tab accepts a URL with client-side validation (must start with http:// or https://). The YouTube tab accepts a YouTube URL with a "Generate AI notes" checkbox; when checked, an informational message warns about additional 1-2 minute processing time. The Note tab provides a textarea with a live title preview showing the auto-generated title (first 60 characters).
 
 All upload IPC handlers follow the same pattern: validate input, extract content via the appropriate extractor from the CLI service layer, upload to Gemini, register in the local registry. If the registry write fails after a successful Gemini upload, the uploaded document is rolled back via deleteDocument(). The content extractors (jsdom, @mozilla/readability, youtube-transcript-plus) are externalized in the electron-vite config to avoid bundling native modules.
+
+---
+
+## Upload Tags (2026-04-12)
+
+### Upload Tag Management
+
+| ID | Requirement | Priority | Status |
+|----|-------------|----------|--------|
+| FR-165 | Add optional `tags: string[]` field to `UploadEntry` data model; existing entries without tags treated as `[]` | Must | Pending |
+| FR-166 | Tag validation: non-empty, no `=` character, max 50 chars, normalized to lowercase, deduplicated | Must | Pending |
+| FR-167 | CLI `upload` command accepts `--tag <tag>` (repeatable) to attach tags at upload time | Must | Pending |
+| FR-168 | CLI `channel-scan` command accepts `--tag <tag>` (repeatable); all scanned videos receive specified tags | Must | Pending |
+| FR-169 | CLI `tag` command for post-upload tag management: `--add`, `--remove`, `--list` options | Must | Pending |
+| FR-170 | CLI `uploads` command supports `--filter tag=<value>`; multiple tag filters use OR logic (any match) | Must | Pending |
+| FR-171 | CLI `ask` command supports `--filter tag=<value>` as client-side citation filter (OR logic) | Must | Pending |
+| FR-172 | CLI `labels` command includes `tags` in output when any upload has tags | Must | Pending |
+| FR-173 | Tags stored in both local registry AND Gemini custom metadata (`stringListValue`) | Must | Pending |
+
+### Upload Tags - Electron IPC
+
+| ID | Requirement | Priority | Status |
+|----|-------------|----------|--------|
+| FR-174 | All upload IPC channels (`upload:file`, `upload:url`, `upload:youtube`, `upload:note`, `youtube:channelScan`) accept optional `tags` parameter | Must | Pending |
+| FR-175 | New `upload:updateTags` IPC channel for add/remove operations on existing uploads | Must | Pending |
+
+### Upload Tags - Electron UI
+
+| ID | Requirement | Priority | Status |
+|----|-------------|----------|--------|
+| FR-176 | Reusable `TagInput` component: chip/badge input with Enter/comma to add, X to remove, Backspace to delete last | Must | Pending |
+| FR-177 | Tag input available in all 5 tabs of AddContentDialog (File, Web Page, YouTube, Channel Scan, Note) | Must | Pending |
+| FR-178 | Tags displayed as badges in upload detail dialog with inline add/remove capability | Must | Pending |
+| FR-179 | Tags column in uploads DataTable showing tag badges (visible by default) | Must | Pending |
+| FR-180 | Tag filter in UploadsFilterBar (text input, debounced, triggers upload list refresh) | Must | Pending |
+| FR-181 | Tag filter in QueryFilterPanel for client-side citation filtering | Must | Pending |
+| FR-182 | Zustand store upload actions updated to accept and pass through tags parameter | Must | Pending |
+
+---
+
+### Upload Tags Feature Description
+
+Upload tags are user-defined string labels attached to uploads for flexible categorization and retrieval. Unlike the fixed-enum `flags` field (`completed | urgent | inactive`), tags are free-form strings normalized to lowercase (e.g., `"machine-learning"`, `"q3-review"`, `"competitor-analysis"`). Tags are stored in both the local registry (`~/.geminirag/registry.json`) and in Gemini custom metadata using `stringListValue` to enable future server-side filtering.
+
+Tag filtering uses OR semantics: when multiple tag filters are specified, an upload matches if it has ANY of the specified tags. This differs from the AND logic used for other filter types. The tag filter group itself is ANDed with other filter groups (e.g., "uploads tagged 'ml' OR 'finance' AND source_type='web'").
+
+In the Electron UI, tags are managed via a reusable `TagInput` chip/badge component that appears in all upload dialogs and in the upload detail inspector. Tags can be assigned at upload time or managed post-upload via the `tag` CLI command or the upload detail dialog's inline editing.

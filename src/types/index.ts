@@ -29,6 +29,8 @@ export interface UploadEntry {
   channelTitle?: string;
   /** Original publish date ISO 8601 (for youtube source type) */
   publishedAt?: string;
+  /** User-defined tags (case-insensitive, stored lowercase) */
+  tags?: string[];
 }
 
 // ===== Workspace =====
@@ -124,7 +126,7 @@ export interface QueryResult {
 export type GeminiFilterKey = 'source_type' | 'source_url';
 
 /** Client-side filter keys that are applied after Gemini returns results */
-export type ClientFilterKey = 'flags' | 'expiration_date' | 'expiration_status';
+export type ClientFilterKey = 'flags' | 'expiration_date' | 'expiration_status' | 'tag';
 
 export interface ParsedFilter {
   key: string;
@@ -162,6 +164,7 @@ export interface ChannelScanOptions {
   dryRun?: boolean;
   maxVideos?: number;
   continueOnError?: boolean;
+  tag?: string[];
 }
 
 // ===== Channel Scan Result =====
@@ -190,6 +193,7 @@ export interface UploadOptions {
   youtube?: string;
   note?: string;
   withNotes?: boolean;
+  tag?: string[];
 }
 
 // ===== Listing Options (CLI) =====

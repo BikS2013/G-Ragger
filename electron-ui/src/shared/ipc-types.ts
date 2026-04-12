@@ -125,23 +125,27 @@ export interface IpcChannelMap {
     output: { filePath: string; fileName: string } | null;
   };
   'upload:file': {
-    input: { workspace: string; filePath: string };
+    input: { workspace: string; filePath: string; tags?: string[] };
     output: UploadResultIpc;
   };
   'upload:url': {
-    input: { workspace: string; url: string };
+    input: { workspace: string; url: string; tags?: string[] };
     output: UploadResultIpc;
   };
   'upload:youtube': {
-    input: { workspace: string; url: string; withNotes: boolean };
+    input: { workspace: string; url: string; withNotes: boolean; tags?: string[] };
     output: UploadResultIpc;
   };
   'upload:note': {
-    input: { workspace: string; text: string };
+    input: { workspace: string; text: string; tags?: string[] };
     output: UploadResultIpc;
   };
+  'upload:updateTags': {
+    input: { workspace: string; uploadId: string; add?: string[]; remove?: string[] };
+    output: string[];
+  };
   'youtube:channelScan': {
-    input: { workspace: string; channel: string; fromDate: string; toDate: string; withNotes: boolean };
+    input: { workspace: string; channel: string; fromDate: string; toDate: string; withNotes: boolean; tags?: string[] };
     output: { uploaded: number; failed: number; errors: string[] };
   };
   'upload:delete': {

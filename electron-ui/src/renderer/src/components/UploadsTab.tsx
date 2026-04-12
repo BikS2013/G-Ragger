@@ -18,7 +18,16 @@ export function UploadsTab() {
     }
   }
 
-  const columns = useMemo(() => createColumns(handleDelete), [])
+  const handleTagsChange = async (upload: UploadEntry, add?: string[], remove?: string[]) => {
+    const ws = useAppStore.getState().selectedWorkspace
+    if (!ws) return
+    const result = await window.api.upload.updateTags(ws, upload.id, add, remove)
+    if (result.success) {
+      useAppStore.getState().loadUploads()
+    }
+  }
+
+  const columns = useMemo(() => createColumns(handleDelete, handleTagsChange), [])
 
   if (!selectedWorkspace) {
     return (

@@ -50,25 +50,36 @@ export const api = {
       ipcRenderer.invoke('upload:download', { workspace, uploadId }),
     uploadFile: (
       workspace: string,
-      filePath: string
+      filePath: string,
+      tags?: string[]
     ): Promise<IpcResult<UploadResultIpc>> =>
-      ipcRenderer.invoke('upload:file', { workspace, filePath }),
+      ipcRenderer.invoke('upload:file', { workspace, filePath, tags }),
     uploadUrl: (
       workspace: string,
-      url: string
+      url: string,
+      tags?: string[]
     ): Promise<IpcResult<UploadResultIpc>> =>
-      ipcRenderer.invoke('upload:url', { workspace, url }),
+      ipcRenderer.invoke('upload:url', { workspace, url, tags }),
     uploadYoutube: (
       workspace: string,
       url: string,
-      withNotes: boolean
+      withNotes: boolean,
+      tags?: string[]
     ): Promise<IpcResult<UploadResultIpc>> =>
-      ipcRenderer.invoke('upload:youtube', { workspace, url, withNotes }),
+      ipcRenderer.invoke('upload:youtube', { workspace, url, withNotes, tags }),
     uploadNote: (
       workspace: string,
-      text: string
+      text: string,
+      tags?: string[]
     ): Promise<IpcResult<UploadResultIpc>> =>
-      ipcRenderer.invoke('upload:note', { workspace, text }),
+      ipcRenderer.invoke('upload:note', { workspace, text, tags }),
+    updateTags: (
+      workspace: string,
+      uploadId: string,
+      add?: string[],
+      remove?: string[]
+    ): Promise<IpcResult<string[]>> =>
+      ipcRenderer.invoke('upload:updateTags', { workspace, uploadId, add, remove }),
     deleteUpload: (
       workspace: string,
       uploadId: string
@@ -91,9 +102,10 @@ export const api = {
       channel: string,
       fromDate: string,
       toDate: string,
-      withNotes: boolean
+      withNotes: boolean,
+      tags?: string[]
     ): Promise<IpcResult<{ uploaded: number; failed: number; errors: string[] }>> =>
-      ipcRenderer.invoke('youtube:channelScan', { workspace, channel, fromDate, toDate, withNotes })
+      ipcRenderer.invoke('youtube:channelScan', { workspace, channel, fromDate, toDate, withNotes, tags })
   },
   dialog: {
     openFile: (): Promise<IpcResult<{ filePath: string; fileName: string } | null>> =>

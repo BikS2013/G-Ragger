@@ -32,12 +32,14 @@ export const QueryFilterPanel = forwardRef<QueryFilterPanelRef>(
     // Client-side filters
     const [flagFilter, setFlagFilter] = useState("all")
     const [expirationStatus, setExpirationStatus] = useState("all")
+    const [tagFilter, setTagFilter] = useState("")
 
     const hasActiveFilters =
       sourceType !== "all" ||
       sourceUrl.trim() !== "" ||
       flagFilter !== "all" ||
-      expirationStatus !== "all"
+      expirationStatus !== "all" ||
+      tagFilter.trim() !== ""
 
     const buildFilters = useCallback((): FilterValues => {
       const geminiFilters: { key: string; value: string }[] = []
@@ -58,15 +60,19 @@ export const QueryFilterPanel = forwardRef<QueryFilterPanelRef>(
           value: expirationStatus,
         })
       }
+      if (tagFilter.trim()) {
+        clientFilters.push({ key: "tag", value: tagFilter.trim().toLowerCase() })
+      }
 
       return { geminiFilters, clientFilters }
-    }, [sourceType, sourceUrl, flagFilter, expirationStatus])
+    }, [sourceType, sourceUrl, flagFilter, expirationStatus, tagFilter])
 
     const resetFilters = useCallback(() => {
       setSourceType("all")
       setSourceUrl("")
       setFlagFilter("all")
       setExpirationStatus("all")
+      setTagFilter("")
     }, [])
 
     useImperativeHandle(
@@ -148,7 +154,7 @@ export const QueryFilterPanel = forwardRef<QueryFilterPanelRef>(
                 Citation Filters -- applied to results
               </p>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium">Flags</label>
                   <Select value={flagFilter} onValueChange={setFlagFilter}>
@@ -162,6 +168,16 @@ export const QueryFilterPanel = forwardRef<QueryFilterPanelRef>(
                       <SelectItem value="inactive">Inactive</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium">Tag</label>
+                  <Input
+                    className="h-9"
+                    placeholder="Filter by tag..."
+                    value={tagFilter}
+                    onChange={(e) => setTagFilter(e.target.value)}
+                  />
                 </div>
 
                 <div className="space-y-1.5">

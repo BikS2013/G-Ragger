@@ -33,7 +33,8 @@ export interface UploadContentResult {
 async function performUpload(
   ctx: AppContext,
   workspace: string,
-  extracted: ExtractedContent
+  extracted: ExtractedContent,
+  tags?: string[]
 ): Promise<UploadResult> {
   const ws = getWorkspace(workspace);
 
@@ -42,6 +43,9 @@ async function performUpload(
   ];
   if (extracted.sourceUrl !== null) {
     customMetadata.push({ key: 'source_url', stringValue: extracted.sourceUrl });
+  }
+  if (tags && tags.length > 0) {
+    customMetadata.push({ key: 'tags', stringListValue: { values: tags } });
   }
 
   const docName = await uploadContent(
@@ -66,6 +70,7 @@ async function performUpload(
     flags: [],
     channelTitle: extracted.channelTitle,
     publishedAt: extracted.publishedAt,
+    tags: tags && tags.length > 0 ? tags : undefined,
   };
 
   try {
@@ -90,10 +95,11 @@ async function performUpload(
 export async function uploadFile(
   ctx: AppContext,
   workspace: string,
-  filePath: string
+  filePath: string,
+  tags?: string[]
 ): Promise<UploadResult> {
   const extracted = await extractDiskFile(filePath);
-  return performUpload(ctx, workspace, extracted);
+  return performUpload(ctx, workspace, extracted, tags);
 }
 
 /**
@@ -102,11 +108,12 @@ export async function uploadFile(
 export async function uploadUrl(
   ctx: AppContext,
   workspace: string,
-  url: string
+  url: string,
+  tags?: string[]
 ): Promise<UploadResult> {
   validateUrl(url);
   const extracted = await extractWebPage(url);
-  return performUpload(ctx, workspace, extracted);
+  return performUpload(ctx, workspace, extracted, tags);
 }
 
 /**
@@ -116,7 +123,8 @@ export async function uploadYoutube(
   ctx: AppContext,
   workspace: string,
   url: string,
-  withNotes: boolean
+  withNotes: boolean,
+  tags?: string[]
 ): Promise<UploadResult> {
   extractYouTubeVideoId(url); // validates URL
   const extracted = await extractYouTubeEnhanced(url, {
@@ -125,7 +133,7 @@ export async function uploadYoutube(
     model: withNotes ? ctx.config.geminiModel : undefined,
     youtubeApiKey: ctx.config.youtubeDataApiKey,
   });
-  return performUpload(ctx, workspace, extracted);
+  return performUpload(ctx, workspace, extracted, tags);
 }
 
 /**
@@ -134,10 +142,11 @@ export async function uploadYoutube(
 export async function uploadNote(
   ctx: AppContext,
   workspace: string,
-  text: string
+  text: string,
+  tags?: string[]
 ): Promise<UploadResult> {
   const extracted = extractNote(text);
-  return performUpload(ctx, workspace, extracted);
+  return performUpload(ctx, workspace, extracted, tags);
 }
 
 /**

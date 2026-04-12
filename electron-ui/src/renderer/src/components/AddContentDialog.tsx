@@ -22,6 +22,7 @@ import {
   File,
   Radio,
 } from "lucide-react"
+import { TagInput } from "./TagInput"
 
 type ContentTab = "file" | "url" | "youtube" | "note" | "channel"
 
@@ -81,6 +82,9 @@ export function AddContentDialog({ open, onOpenChange }: AddContentDialogProps) 
   const [channelWithNotes, setChannelWithNotes] = useState(false)
   const [channelScanResult, setChannelScanResult] = useState<{ uploaded: number; failed: number } | null>(null)
 
+  // Tags state (shared across all tabs)
+  const [tags, setTags] = useState<string[]>([])
+
   // Elapsed time counter
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -101,6 +105,7 @@ export function AddContentDialog({ open, onOpenChange }: AddContentDialogProps) 
     setChannelToDate("")
     setChannelWithNotes(false)
     setChannelScanResult(null)
+    setTags([])
     setElapsedSeconds(0)
   }, [])
 
@@ -157,34 +162,36 @@ export function AddContentDialog({ open, onOpenChange }: AddContentDialogProps) 
   }
 
   // Submit handlers
+  const tagsOrUndefined = tags.length > 0 ? tags : undefined
+
   const handleFileUpload = () => {
     if (filePath) {
-      uploadFile(filePath)
+      uploadFile(filePath, tagsOrUndefined)
     }
   }
 
   const handleUrlUpload = () => {
     if (url && (url.startsWith("http://") || url.startsWith("https://"))) {
-      uploadUrl(url)
+      uploadUrl(url, tagsOrUndefined)
     }
   }
 
   const handleYoutubeUpload = () => {
     if (youtubeUrl && (youtubeUrl.includes("youtube.com") || youtubeUrl.includes("youtu.be"))) {
-      uploadYoutube(youtubeUrl, withNotes)
+      uploadYoutube(youtubeUrl, withNotes, tagsOrUndefined)
     }
   }
 
   const handleNoteUpload = () => {
     if (noteText.trim()) {
-      uploadNote(noteText)
+      uploadNote(noteText, tagsOrUndefined)
     }
   }
 
   const handleChannelScan = async () => {
     if (channelInput.trim() && channelFromDate && channelToDate) {
       setChannelScanResult(null)
-      const result = await channelScan(channelInput.trim(), channelFromDate, channelToDate, channelWithNotes)
+      const result = await channelScan(channelInput.trim(), channelFromDate, channelToDate, channelWithNotes, tagsOrUndefined)
       if (result.success) {
         setChannelScanResult({ uploaded: result.uploaded ?? 0, failed: result.failed ?? 0 })
       }
@@ -284,6 +291,7 @@ export function AddContentDialog({ open, onOpenChange }: AddContentDialogProps) 
                   </div>
                 )}
               </div>
+              <TagInput tags={tags} onChange={setTags} placeholder="Add tags..." />
               <Button
                 onClick={handleFileUpload}
                 disabled={!filePath || isUploading}
@@ -307,6 +315,7 @@ export function AddContentDialog({ open, onOpenChange }: AddContentDialogProps) 
                   URL must start with http:// or https://
                 </p>
               )}
+              <TagInput tags={tags} onChange={setTags} placeholder="Add tags..." />
               <Button
                 onClick={handleUrlUpload}
                 disabled={!url || !isUrlValid || isUploading}
@@ -345,6 +354,7 @@ export function AddContentDialog({ open, onOpenChange }: AddContentDialogProps) 
                   AI notes generation adds 1-2 minutes to upload time
                 </p>
               )}
+              <TagInput tags={tags} onChange={setTags} placeholder="Add tags..." />
               <Button
                 onClick={handleYoutubeUpload}
                 disabled={!youtubeUrl || !isYoutubeUrlValid || isUploading}
@@ -370,6 +380,7 @@ export function AddContentDialog({ open, onOpenChange }: AddContentDialogProps) 
                   {noteText.trim().length > 60 ? "..." : ""}
                 </p>
               )}
+              <TagInput tags={tags} onChange={setTags} placeholder="Add tags..." />
               <Button
                 onClick={handleNoteUpload}
                 disabled={!noteText.trim() || isUploading}
@@ -426,6 +437,7 @@ export function AddContentDialog({ open, onOpenChange }: AddContentDialogProps) 
                   Uploaded {channelScanResult.uploaded} video{channelScanResult.uploaded !== 1 ? "s" : ""}{channelScanResult.failed > 0 ? `, ${channelScanResult.failed} failed` : ""}
                 </div>
               )}
+              <TagInput tags={tags} onChange={setTags} placeholder="Add tags to all videos..." />
               <Button
                 onClick={handleChannelScan}
                 disabled={!channelInput.trim() || !channelFromDate || !channelToDate || isUploading}

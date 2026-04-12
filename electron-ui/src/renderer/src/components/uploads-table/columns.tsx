@@ -1,8 +1,10 @@
 import * as React from "react"
+import { useState } from "react"
 import { type ColumnDef } from "@tanstack/react-table"
-import { ArrowUpDown, Trash2 } from "lucide-react"
+import { ArrowUpDown, Trash2, Plus, X } from "lucide-react"
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
+import { Input } from "../ui/input"
 import { formatDate } from "../../lib/date-format"
 
 // Local mirror matching the store's UploadEntry shape
@@ -17,6 +19,7 @@ export interface UploadEntry {
   flags: ("completed" | "urgent" | "inactive")[]
   channelTitle?: string
   publishedAt?: string
+  tags?: string[]
 }
 
 const sourceVariantMap: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -32,7 +35,66 @@ const flagVariantMap: Record<string, "default" | "secondary" | "destructive" | "
   inactive: "outline",
 }
 
-export function createColumns(onDelete?: (upload: UploadEntry) => void): ColumnDef<UploadEntry>[] {
+function InlineTagEditor({ upload, onTagsChange }: { upload: UploadEntry; onTagsChange: (upload: UploadEntry, add?: string[], remove?: string[]) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [input, setInput] = useState("")
+  const tags = upload.tags ?? []
+
+  const handleAdd = () => {
+    const tag = input.trim().toLowerCase()
+    if (!tag || tag.includes("=") || tag.length > 50 || tags.includes(tag)) return
+    onTagsChange(upload, [tag])
+    setInput("")
+  }
+
+  const handleRemove = (tag: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    onTagsChange(upload, undefined, [tag])
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
+      {tags.map((tag) => (
+        <Badge key={tag} variant="outline" className="text-xs gap-0.5 pr-1">
+          {tag}
+          <button
+            type="button"
+            onClick={(e) => handleRemove(tag, e)}
+            className="ml-0.5 hover:text-destructive"
+          >
+            <X className="h-2.5 w-2.5" />
+          </button>
+        </Badge>
+      ))}
+      {editing ? (
+        <Input
+          autoFocus
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") { e.preventDefault(); handleAdd() }
+            if (e.key === "Escape") { setEditing(false); setInput("") }
+          }}
+          onBlur={() => { if (!input.trim()) setEditing(false) }}
+          placeholder="tag..."
+          className="h-6 w-20 text-xs px-1"
+        />
+      ) : (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-5 w-5 text-muted-foreground hover:text-foreground"
+          onClick={(e) => { e.stopPropagation(); setEditing(true) }}
+          title="Add tag"
+        >
+          <Plus className="h-3 w-3" />
+        </Button>
+      )}
+    </div>
+  )
+}
+
+export function createColumns(onDelete?: (upload: UploadEntry) => void, onTagsChange?: (upload: UploadEntry, add?: string[], remove?: string[]) => void): ColumnDef<UploadEntry>[] {
   return [
   {
     accessorKey: "id",
@@ -107,6 +169,27 @@ export function createColumns(onDelete?: (upload: UploadEntry) => void): ColumnD
               className="text-xs"
             >
               {flag}
+            </Badge>
+          ))}
+        </div>
+      )
+    },
+    enableSorting: false,
+  },
+  {
+    id: "tags",
+    header: "Tags",
+    cell: ({ row }) => {
+      if (onTagsChange) {
+        return <InlineTagEditor upload={row.original} onTagsChange={onTagsChange} />
+      }
+      const tags = row.original.tags ?? []
+      if (tags.length === 0) return null
+      return (
+        <div className="flex flex-wrap gap-1">
+          {tags.map((tag) => (
+            <Badge key={tag} variant="outline" className="text-xs">
+              {tag}
             </Badge>
           ))}
         </div>

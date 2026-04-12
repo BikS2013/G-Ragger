@@ -1,7 +1,7 @@
 import type { AppContext } from './context.js';
 import { deleteDocument } from '../services/file-search.js';
 import { getWorkspace, updateUpload, removeUpload } from '../services/registry.js';
-import { validateDate, validateFlags } from '../utils/validation.js';
+import { validateDate, validateFlags, validateTags } from '../utils/validation.js';
 import type { Flag } from '../types/index.js';
 
 /**
@@ -101,6 +101,60 @@ export function updateFlags(
 }
 
 /**
+ * Add or remove tags on an upload.
+ * Tags are validated (trimmed, lowercased, deduplicated).
+ * Returns the updated tags array.
+ */
+export function updateTags(
+  workspace: string,
+  uploadId: string,
+  add?: string[],
+  remove?: string[]
+): string[] {
+  if (!add && !remove) {
+    throw new Error('At least one of --add or --remove must be provided');
+  }
+
+  const ws = getWorkspace(workspace);
+  const upload = ws.uploads[uploadId];
+  if (!upload) {
+    throw new Error(`Upload '${uploadId}' not found in workspace '${workspace}'`);
+  }
+
+  let currentTags: string[] = [...(upload.tags ?? [])];
+
+  if (add) {
+    const normalizedAdd = validateTags(add);
+    for (const tag of normalizedAdd) {
+      if (!currentTags.includes(tag)) {
+        currentTags.push(tag);
+      }
+    }
+  }
+
+  if (remove) {
+    const normalizedRemove = validateTags(remove);
+    const toRemove = new Set(normalizedRemove);
+    currentTags = currentTags.filter((t) => !toRemove.has(t));
+  }
+
+  updateUpload(workspace, uploadId, { tags: currentTags });
+  return currentTags;
+}
+
+/**
+ * Get the current tags for an upload.
+ */
+export function getTags(workspace: string, uploadId: string): string[] {
+  const ws = getWorkspace(workspace);
+  const upload = ws.uploads[uploadId];
+  if (!upload) {
+    throw new Error(`Upload '${uploadId}' not found in workspace '${workspace}'`);
+  }
+  return upload.tags ?? [];
+}
+
+/**
  * List all distinct metadata labels used in a workspace.
  */
 export function getLabels(workspace: string): string[] {
@@ -118,6 +172,7 @@ export function getLabels(workspace: string): string[] {
     if (upload.sourceUrl !== null) labels.add('source_url');
     if (upload.expirationDate !== null) labels.add('expiration_date');
     if (upload.flags.length > 0) labels.add('flags');
+    if ((upload.tags ?? []).length > 0) labels.add('tags');
     labels.add('timestamp');
   }
 

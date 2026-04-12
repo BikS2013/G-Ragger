@@ -11,6 +11,7 @@ import { registerQueryCommand } from './commands/query.js';
 import { registerUploadsCommand } from './commands/uploads.js';
 import { registerGetCommand } from './commands/get.js';
 import { registerChannelScanCommand } from './commands/channel-scan.js';
+import { registerTagCommand } from './commands/tag.js';
 
 const program = new Command();
 
@@ -61,6 +62,7 @@ registerQueryCommand(program);
 registerUploadsCommand(program);
 registerGetCommand(program);
 registerChannelScanCommand(program);
+registerTagCommand(program);
 
 // Global error handler for unhandled rejections
 process.on('unhandledRejection', (reason: unknown) => {

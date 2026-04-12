@@ -6,6 +6,7 @@ import {
   uploadYoutube,
   uploadNote,
 } from '../operations/upload-ops.js';
+import { validateTags } from '../utils/validation.js';
 import type { UploadOptions } from '../types/index.js';
 
 /**
@@ -20,6 +21,7 @@ export function registerUploadCommand(program: Command): void {
     .option('--youtube <url>', 'Upload from a YouTube video transcript')
     .option('--note <text>', 'Upload a personal note')
     .option('--with-notes', 'Generate AI notes for YouTube uploads')
+    .option('--tag <tags...>', 'Tags to attach to the upload (repeatable)')
     .description('Upload content to a workspace')
     .action(async (workspace: string, options: UploadOptions) => {
       try {
@@ -39,16 +41,17 @@ export function registerUploadCommand(program: Command): void {
         }
 
         const ctx = createContext();
+        const tags = options.tag ? validateTags(options.tag) : undefined;
         let result;
 
         if (options.file) {
-          result = await uploadFile(ctx, workspace, options.file);
+          result = await uploadFile(ctx, workspace, options.file, tags);
         } else if (options.url) {
-          result = await uploadUrl(ctx, workspace, options.url);
+          result = await uploadUrl(ctx, workspace, options.url, tags);
         } else if (options.youtube) {
-          result = await uploadYoutube(ctx, workspace, options.youtube, !!options.withNotes);
+          result = await uploadYoutube(ctx, workspace, options.youtube, !!options.withNotes, tags);
         } else if (options.note) {
-          result = await uploadNote(ctx, workspace, options.note);
+          result = await uploadNote(ctx, workspace, options.note, tags);
         } else {
           throw new Error('One of --file, --url, --youtube, or --note must be provided');
         }

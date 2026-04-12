@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Download, Copy, Clock, Flag, FileText, ExternalLink, Video, StickyNote, Loader2, Text, Trash2 } from "lucide-react"
+import { Download, Copy, Clock, Flag, FileText, ExternalLink, Video, StickyNote, Loader2, Text, Trash2, X, Plus, Tag } from "lucide-react"
 import { useAppStore } from "../store"
 import {
   Dialog,
@@ -12,6 +12,7 @@ import {
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
 import { Separator } from "./ui/separator"
+import { Input } from "./ui/input"
 import { ContentViewer } from "./ContentViewer"
 import { formatDateTime, formatDate } from "../lib/date-format"
 
@@ -95,6 +96,44 @@ export function UploadDetail() {
   const [youtubeLoading, setYoutubeLoading] = useState<"transcript" | "notes" | "description" | null>(null)
   const [youtubeError, setYoutubeError] = useState<string | null>(null)
   const [activeContentSource, setActiveContentSource] = useState<"gemini" | "transcript" | "notes" | "description">("gemini")
+
+  // Tag editing state
+  const [tagInput, setTagInput] = useState("")
+  const [tagSaving, setTagSaving] = useState(false)
+  const selectUpload = useAppStore((s) => s.selectUpload)
+  const loadUploads = useAppStore((s) => s.loadUploads)
+
+  const handleAddTag = async () => {
+    const tag = tagInput.trim().toLowerCase()
+    if (!tag || !selectedUpload || !selectedWorkspace) return
+    if (tag.includes("=") || tag.length > 50) return
+    if ((selectedUpload.tags ?? []).includes(tag)) { setTagInput(""); return }
+    setTagSaving(true)
+    try {
+      const result = await window.api.upload.updateTags(selectedWorkspace, selectedUpload.id, [tag])
+      if (result.success) {
+        selectUpload({ ...selectedUpload, tags: result.data })
+        loadUploads()
+      }
+    } finally {
+      setTagSaving(false)
+      setTagInput("")
+    }
+  }
+
+  const handleRemoveTag = async (tag: string) => {
+    if (!selectedUpload || !selectedWorkspace) return
+    setTagSaving(true)
+    try {
+      const result = await window.api.upload.updateTags(selectedWorkspace, selectedUpload.id, undefined, [tag])
+      if (result.success) {
+        selectUpload({ ...selectedUpload, tags: result.data })
+        loadUploads()
+      }
+    } finally {
+      setTagSaving(false)
+    }
+  }
 
   const isOpen = selectedUpload !== null
   const isYoutube = selectedUpload?.sourceType === "youtube" && !!selectedUpload?.sourceUrl
@@ -350,6 +389,57 @@ export function UploadDetail() {
             )}
           </div>
 
+          {/* Tags (editable) */}
+          <div className="flex items-start gap-2">
+            <span className="w-28 shrink-0 font-medium text-muted-foreground pt-1">
+              <Tag className="inline h-3 w-3 mr-1" />
+              Tags
+            </span>
+            <div className="flex-1 space-y-1.5">
+              {(selectedUpload.tags ?? []).length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {(selectedUpload.tags ?? []).map((tag) => (
+                    <Badge key={tag} variant="outline" className="text-xs gap-1">
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTag(tag)}
+                        disabled={tagSaving}
+                        className="ml-0.5 hover:text-destructive disabled:opacity-50"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center gap-1.5">
+                <Input
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === ",") {
+                      e.preventDefault()
+                      handleAddTag()
+                    }
+                  }}
+                  placeholder="Add tag..."
+                  className="h-7 text-xs w-36"
+                  disabled={tagSaving}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={handleAddTag}
+                  disabled={!tagInput.trim() || tagSaving}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+
           {/* Gemini Document Name */}
           <div className="flex items-start gap-2">
             <span className="w-28 shrink-0 font-medium text-muted-foreground">
@@ -366,7 +456,28 @@ export function UploadDetail() {
         {/* Content Section */}
         <div className="flex min-h-0 flex-1 flex-col gap-2">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-medium">Content</h4>
+            <div className="flex items-center gap-2">
+              <h4 className="text-sm font-medium">Content</h4>
+              {(() => {
+                const visibleContent = activeContentSource === "gemini" ? uploadContent : youtubeContent
+                if (!visibleContent) return null
+                return (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 gap-1 text-xs text-muted-foreground"
+                    onClick={() => {
+                      navigator.clipboard.writeText(visibleContent)
+                      setCopiedField("content")
+                      setTimeout(() => setCopiedField(null), 2000)
+                    }}
+                  >
+                    <Copy className="h-3 w-3" />
+                    {copiedField === "content" ? "Copied!" : "Copy"}
+                  </Button>
+                )
+              })()}
+            </div>
             {isYoutube && (
               <div className="flex items-center gap-1.5">
                 <Button

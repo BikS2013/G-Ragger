@@ -446,11 +446,12 @@ test('GEMINI_FILTER_KEYS contains source_type and source_url', () => {
   assert(GEMINI_FILTER_KEYS.size === 2, `should have 2 entries, got ${GEMINI_FILTER_KEYS.size}`);
 });
 
-test('CLIENT_FILTER_KEYS contains flags, expiration_date, expiration_status', () => {
+test('CLIENT_FILTER_KEYS contains flags, expiration_date, expiration_status, tag', () => {
   assert(CLIENT_FILTER_KEYS.has('flags'), 'should contain flags');
   assert(CLIENT_FILTER_KEYS.has('expiration_date'), 'should contain expiration_date');
   assert(CLIENT_FILTER_KEYS.has('expiration_status'), 'should contain expiration_status');
-  assert(CLIENT_FILTER_KEYS.size === 3, `should have 3 entries, got ${CLIENT_FILTER_KEYS.size}`);
+  assert(CLIENT_FILTER_KEYS.has('tag'), 'should contain tag');
+  assert(CLIENT_FILTER_KEYS.size === 4, `should have 4 entries, got ${CLIENT_FILTER_KEYS.size}`);
 });
 
 // ===== Summary =====

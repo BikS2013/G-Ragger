@@ -95,6 +95,38 @@ export function validateFlags(flags: string[]): flags is Flag[] {
 }
 
 /**
+ * Validate and normalize tags.
+ * Trims, lowercases, deduplicates, and rejects invalid tags.
+ *
+ * @param tags - Array of raw tag strings
+ * @returns Normalized (lowercase, trimmed, deduplicated) tag array
+ * @throws Error if any tag is empty, contains '=', or exceeds 50 characters
+ */
+export function validateTags(tags: string[]): string[] {
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+
+  for (const raw of tags) {
+    const tag = raw.trim().toLowerCase();
+    if (tag.length === 0) {
+      throw new Error('Tag must be a non-empty string.');
+    }
+    if (tag.includes('=')) {
+      throw new Error(`Tag '${tag}' must not contain the '=' character.`);
+    }
+    if (tag.length > 50) {
+      throw new Error(`Tag '${tag}' exceeds the maximum length of 50 characters.`);
+    }
+    if (!seen.has(tag)) {
+      seen.add(tag);
+      normalized.push(tag);
+    }
+  }
+
+  return normalized;
+}
+
+/**
  * Validate a workspace name.
  *
  * @param name - Workspace name to validate

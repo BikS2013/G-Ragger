@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { createContext } from '../operations/context.js';
 import { channelScan } from '../operations/youtube-ops.js';
+import { validateTags } from '../utils/validation.js';
 import { formatChannelScanSummary } from '../utils/format.js';
 import type { ChannelScanOptions } from '../types/index.js';
 
@@ -18,10 +19,12 @@ export function registerChannelScanCommand(program: Command): void {
     .option('--dry-run', 'List videos without uploading')
     .option('--max-videos <n>', 'Limit number of videos to process', parseInt)
     .option('--continue-on-error', 'Skip failed videos instead of aborting')
+    .option('--tag <tags...>', 'Tags to attach to all uploaded videos')
     .description('Scan a YouTube channel and upload video transcripts to a workspace')
     .action(async (workspace: string, options: ChannelScanOptions) => {
       try {
         const ctx = createContext();
+        const tags = options.tag ? validateTags(options.tag) : undefined;
 
         const { videos, result } = await channelScan(
           ctx,
@@ -34,6 +37,7 @@ export function registerChannelScanCommand(program: Command): void {
             dryRun: options.dryRun,
             maxVideos: options.maxVideos,
             continueOnError: options.continueOnError,
+            tags,
           },
           {
             onResolving: (ch) => console.log(`Resolving channel: ${ch}...`),

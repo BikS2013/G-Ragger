@@ -8,7 +8,7 @@ import type { ParsedFilter, UploadEntry } from '../types/index.js';
 export const GEMINI_FILTER_KEYS = new Set(['source_type', 'source_url']);
 
 /** Keys that are filtered client-side after Gemini returns results */
-export const CLIENT_FILTER_KEYS = new Set(['flags', 'expiration_date', 'expiration_status']);
+export const CLIENT_FILTER_KEYS = new Set(['flags', 'expiration_date', 'expiration_status', 'tag']);
 
 /**
  * Parse a "key=value" filter string into a ParsedFilter object.
@@ -82,7 +82,21 @@ export function passesClientFilters(
     return false;
   }
 
-  for (const filter of clientFilters) {
+  // Pre-group tag filters for OR logic
+  const tagFilters = clientFilters.filter((f) => f.key === 'tag');
+  const otherFilters = clientFilters.filter((f) => f.key !== 'tag');
+
+  // Tag filters use OR logic: upload must have ANY of the specified tags
+  if (tagFilters.length > 0) {
+    const uploadTags = upload.tags ?? [];
+    const hasAnyTag = tagFilters.some((tf) =>
+      uploadTags.includes(tf.value.toLowerCase())
+    );
+    if (!hasAnyTag) return false;
+  }
+
+  // All other filters use AND logic
+  for (const filter of otherFilters) {
     if (filter.key === 'flags') {
       if (!upload.flags.includes(filter.value as UploadEntry['flags'][number])) {
         return false;
@@ -124,7 +138,7 @@ export function parseListingFilter(filterStr: string): { key: string; value: str
   const key = filterStr.substring(0, eqIndex);
   const value = filterStr.substring(eqIndex + 1);
 
-  const validKeys = new Set(['source_type', 'flags', 'expiration_status', 'channel', 'published_from', 'published_to']);
+  const validKeys = new Set(['source_type', 'flags', 'expiration_status', 'channel', 'published_from', 'published_to', 'tag']);
   if (!validKeys.has(key)) {
     throw new Error(
       `Unknown filter key: '${key}'. Valid keys for listing: source_type, flags, expiration_status, channel, published_from, published_to`
@@ -145,8 +159,22 @@ export function applyFilters(
     return uploads;
   }
 
+  // Pre-group tag filters for OR logic
+  const tagFilters = filters.filter((f) => f.key === 'tag');
+  const otherFilters = filters.filter((f) => f.key !== 'tag');
+
   return uploads.filter((upload) => {
-    for (const filter of filters) {
+    // Tag filters use OR logic: upload must have ANY of the specified tags
+    if (tagFilters.length > 0) {
+      const uploadTags = upload.tags ?? [];
+      const hasAnyTag = tagFilters.some((tf) =>
+        uploadTags.includes(tf.value.toLowerCase())
+      );
+      if (!hasAnyTag) return false;
+    }
+
+    // All other filters use AND logic
+    for (const filter of otherFilters) {
       if (filter.key === 'source_type') {
         if (upload.sourceType !== filter.value) {
           return false;

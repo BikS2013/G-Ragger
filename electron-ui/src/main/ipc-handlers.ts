@@ -24,6 +24,7 @@ import {
   getDescription,
   channelScan,
 } from '@cli/operations/youtube-ops.js';
+import { updateTags } from '@cli/operations/metadata-ops.js';
 import { getConfigFile, saveConfigFile } from '@cli/operations/config-ops.js';
 
 import { initialize, getContext } from './service-bridge.js';
@@ -149,41 +150,48 @@ export function registerIpcHandlers(): void {
   // --- upload:file ---
   ipcMain.handle(
     'upload:file',
-    (_event, input: { workspace: string; filePath: string }) =>
+    (_event, input: { workspace: string; filePath: string; tags?: string[] }) =>
       wrap<UploadResultIpc>(async () => {
         const ctx = getContext();
-        return uploadFile(ctx, input.workspace, input.filePath);
+        return uploadFile(ctx, input.workspace, input.filePath, input.tags);
       })
   );
 
   // --- upload:url ---
   ipcMain.handle(
     'upload:url',
-    (_event, input: { workspace: string; url: string }) =>
+    (_event, input: { workspace: string; url: string; tags?: string[] }) =>
       wrap<UploadResultIpc>(async () => {
         const ctx = getContext();
-        return uploadUrl(ctx, input.workspace, input.url);
+        return uploadUrl(ctx, input.workspace, input.url, input.tags);
       })
   );
 
   // --- upload:youtube ---
   ipcMain.handle(
     'upload:youtube',
-    (_event, input: { workspace: string; url: string; withNotes: boolean }) =>
+    (_event, input: { workspace: string; url: string; withNotes: boolean; tags?: string[] }) =>
       wrap<UploadResultIpc>(async () => {
         const ctx = getContext();
-        return uploadYoutube(ctx, input.workspace, input.url, input.withNotes);
+        return uploadYoutube(ctx, input.workspace, input.url, input.withNotes, input.tags);
       })
   );
 
   // --- upload:note ---
   ipcMain.handle(
     'upload:note',
-    (_event, input: { workspace: string; text: string }) =>
+    (_event, input: { workspace: string; text: string; tags?: string[] }) =>
       wrap<UploadResultIpc>(async () => {
         const ctx = getContext();
-        return uploadNote(ctx, input.workspace, input.text);
+        return uploadNote(ctx, input.workspace, input.text, input.tags);
       })
+  );
+
+  // --- upload:updateTags ---
+  ipcMain.handle(
+    'upload:updateTags',
+    (_event, input: { workspace: string; uploadId: string; add?: string[]; remove?: string[] }) =>
+      wrap<string[]>(() => updateTags(input.workspace, input.uploadId, input.add, input.remove))
   );
 
   // --- upload:delete ---
@@ -248,6 +256,7 @@ export function registerIpcHandlers(): void {
         fromDate: string;
         toDate: string;
         withNotes: boolean;
+        tags?: string[];
       }
     ) =>
       wrap<{ uploaded: number; failed: number; errors: string[] }>(async () => {
@@ -258,7 +267,7 @@ export function registerIpcHandlers(): void {
           input.channel,
           input.fromDate,
           input.toDate,
-          { withNotes: input.withNotes, continueOnError: true },
+          { withNotes: input.withNotes, continueOnError: true, tags: input.tags },
           {
             onProcessing: (i, total, title) =>
               console.log(`[youtube:channelScan] [${i}/${total}] Processing: ${title}`),

@@ -176,6 +176,7 @@ export async function channelScan(
     dryRun?: boolean;
     maxVideos?: number;
     continueOnError?: boolean;
+    tags?: string[];
   } = {},
   progress?: ChannelScanProgress
 ): Promise<{
@@ -247,6 +248,9 @@ export async function channelScan(
         { key: 'source_type', stringValue: 'youtube' },
         { key: 'source_url', stringValue: videoUrl },
       ];
+      if (options.tags && options.tags.length > 0) {
+        customMetadata.push({ key: 'tags', stringListValue: { values: options.tags } });
+      }
 
       const documentName = await uploadContent(
         ctx.client,
@@ -270,6 +274,7 @@ export async function channelScan(
         flags: [],
         channelTitle: video.channelTitle,
         publishedAt: video.publishedAt,
+        tags: options.tags && options.tags.length > 0 ? options.tags : undefined,
       };
       addUpload(workspace, entry);
 

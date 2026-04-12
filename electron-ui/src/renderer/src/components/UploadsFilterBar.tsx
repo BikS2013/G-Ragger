@@ -15,6 +15,7 @@ export function UploadsFilterBar() {
   const setUploadFilters = useAppStore((s) => s.setUploadFilters)
   const loadUploads = useAppStore((s) => s.loadUploads)
   const channelDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const tagDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const getFilterValue = (key: string): string => {
     const found = uploadFilters.find((f) => f.key === key)
@@ -37,6 +38,13 @@ export function UploadsFilterBar() {
     if (channelDebounce.current) clearTimeout(channelDebounce.current)
     channelDebounce.current = setTimeout(() => {
       updateFilter("channel", value)
+    }, 400)
+  }
+
+  const updateTagFilter = (value: string) => {
+    if (tagDebounce.current) clearTimeout(tagDebounce.current)
+    tagDebounce.current = setTimeout(() => {
+      updateFilter("tag", value.trim().toLowerCase())
     }, 400)
   }
 
@@ -99,6 +107,13 @@ export function UploadsFilterBar() {
         defaultValue={getFilterValue("channel")}
         onChange={(e) => updateChannelFilter(e.target.value)}
         className="w-28 h-8 text-xs"
+      />
+
+      <Input
+        placeholder="Tag..."
+        defaultValue={getFilterValue("tag")}
+        onChange={(e) => updateTagFilter(e.target.value)}
+        className="w-24 h-8 text-xs"
       />
 
       {/* Date filters grouped together */}

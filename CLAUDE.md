@@ -101,11 +101,17 @@ Both use the same `AppContext` (config + Gemini client) from `src/operations/con
             g-ragger upload <workspace> --url <url>         Upload content from a web page
             g-ragger upload <workspace> --youtube <url>     Upload YouTube video (structured markdown)
                 --with-notes                                Generate AI notes for YouTube uploads
+                --tag <tags...>                             Tags to attach (repeatable)
             g-ragger upload <workspace> --note <text>       Add a personal note
 
             g-ragger uploads <workspace>                    List all uploads in a workspace
                 --filter <key=value>                        Filter by metadata (repeatable)
                 --sort <field>                              Sort by timestamp or -timestamp
+
+            g-ragger tag <workspace> <upload-id>              Manage tags on an upload
+                --add <tags...>                             Add tags
+                --remove <tags...>                          Remove tags
+                --list                                      List current tags
 
             g-ragger update-title <ws> <id> <title>         Change an upload's title
             g-ragger remove <workspace> <upload-id>         Delete an upload
@@ -130,6 +136,7 @@ Both use the same `AppContext` (config + Gemini client) from `src/operations/con
                 --dry-run                                   List videos without uploading
                 --max-videos <n>                             Limit videos processed
                 --continue-on-error                         Skip failed videos
+                --tag <tags...>                             Tags to attach to all videos
 
             g-ragger ask <workspace> <question>             Query a workspace
                 --workspace <name>                          Add additional workspaces (repeatable)
@@ -141,6 +148,7 @@ Both use the same `AppContext` (config + Gemini client) from `src/operations/con
             flags=completed|urgent|inactive     (client-side, post-filter)
             expiration_status=expired           (client-side, post-filter)
             channel=<text>                      (client-side, substring match on YouTube channel)
+            tag=<tag>                           (client-side, OR logic: upload has ANY matching tag)
             published_from=YYYY-MM-DD           (client-side, YouTube publish date >= value)
             published_to=YYYY-MM-DD             (client-side, YouTube publish date <= value)
 
@@ -155,7 +163,7 @@ Both use the same `AppContext` (config + Gemini client) from `src/operations/con
 
         Desktop UI Features (g-ragger ui):
             - Workspace creation, deletion, and browsing in sidebar
-            - Content upload via 5-tab dialog (File, Web Page, YouTube, Channel Scan, Note)
+            - Content upload via 5-tab dialog (File, Web Page, YouTube, Channel Scan, Note) with tag input
             - Upload browser with DataTable, filter bar, sortable columns
             - Content inspector with resizable dialog
             - YouTube content modes: Gemini, Transcript, AI Notes, Description
@@ -230,5 +238,10 @@ Both use the same `AppContext` (config + Gemini client) from `src/operations/con
             g-ragger channel-scan my-research --channel @IndyDevDan --from 2026-01-01 --to 2026-04-10 --dry-run
             g-ragger ask my-research "What are the key findings?" --filter source_type=web
             g-ragger ask my-research "Summary" --workspace other-workspace
+            g-ragger upload my-research --url https://example.com --tag ml --tag finance
+            g-ragger tag my-research <upload-id> --add review --remove draft
+            g-ragger tag my-research <upload-id> --list
+            g-ragger uploads my-research --filter tag=ml
+            g-ragger ask my-research "key findings" --filter tag=ml
     </info>
 </G-Ragger>
