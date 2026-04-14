@@ -97,6 +97,14 @@ export const api = {
       ipcRenderer.invoke('youtube:getNotes', { url }),
     getDescription: (url: string): Promise<IpcResult<string>> =>
       ipcRenderer.invoke('youtube:getDescription', { url }),
+    getReport: (url: string): Promise<IpcResult<string>> =>
+      ipcRenderer.invoke('youtube:getReport', { url }),
+    emailReport: (
+      url: string,
+      title: string,
+      reportMarkdown?: string
+    ): Promise<IpcResult<{ mdPath: string; docxPath: string }>> =>
+      ipcRenderer.invoke('youtube:emailReport', { url, title, reportMarkdown }),
     channelScan: (
       workspace: string,
       channel: string,

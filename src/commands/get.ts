@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { Command } from 'commander';
 import { createContext } from '../operations/context.js';
 import { getUploadContent } from '../operations/upload-ops.js';
-import { getNotes, getDescription } from '../operations/youtube-ops.js';
+import { getNotes, getDescription, generateReport, prepareReportFiles, openEmailWithReport } from '../operations/youtube-ops.js';
 import { getWorkspace } from '../services/registry.js';
 import { formatUploadMetadataHeader } from '../utils/format.js';
 import { findUploadById } from '../utils/filters.js';
@@ -19,12 +19,14 @@ export function registerGetCommand(program: Command): void {
     .option('--raw', 'Skip metadata header, output only document content')
     .option('--description', 'Fetch YouTube video description directly (YouTube uploads only)')
     .option('--notes', 'Generate AI notes from YouTube transcript (YouTube uploads only)')
+    .option('--report', 'Generate detailed AI report from transcript + description (YouTube uploads only)')
+    .option('--email', 'Send content via system email client (use with --report or --notes)')
     .description('Retrieve the full content of an uploaded document')
     .action(
       async (
         workspace: string,
         uploadId: string,
-        options: { output?: string; raw?: boolean; description?: boolean; notes?: boolean }
+        options: { output?: string; raw?: boolean; description?: boolean; notes?: boolean; report?: boolean; email?: boolean }
       ) => {
         try {
           const ctx = createContext();
@@ -37,25 +39,50 @@ export function registerGetCommand(program: Command): void {
           }
 
           // Mutual exclusivity check
-          if (options.description && options.notes) {
-            throw new Error('--description and --notes are mutually exclusive. Use only one at a time.');
+          const modeCount = [options.description, options.notes, options.report].filter(Boolean).length;
+          if (modeCount > 1) {
+            throw new Error('--description, --notes, and --report are mutually exclusive. Use only one at a time.');
+          }
+
+          if (options.email && !options.report && !options.notes) {
+            throw new Error('--email requires --report or --notes. Use: g-ragger get <ws> <id> --report --email');
           }
 
           let content: string;
+          let emailSubjectPrefix = 'YouTube Content';
 
           if (options.description) {
             if (upload.sourceType !== 'youtube' || !upload.sourceUrl) {
               throw new Error('--description is only available for YouTube uploads with a source URL.');
             }
             content = await getDescription(ctx, upload.sourceUrl);
+            emailSubjectPrefix = 'YouTube Description';
           } else if (options.notes) {
             if (upload.sourceType !== 'youtube' || !upload.sourceUrl) {
               throw new Error('--notes is only available for YouTube uploads with a source URL.');
             }
             content = await getNotes(ctx, upload.sourceUrl);
+            emailSubjectPrefix = 'YouTube AI Notes';
+          } else if (options.report) {
+            if (upload.sourceType !== 'youtube' || !upload.sourceUrl) {
+              throw new Error('--report is only available for YouTube uploads with a source URL.');
+            }
+            content = await generateReport(ctx, upload.sourceUrl);
+            emailSubjectPrefix = 'YouTube Report';
           } else {
             const result = await getUploadContent(ctx, workspace, uploadId);
             content = result.content;
+          }
+
+          // Send via email if requested
+          if (options.email) {
+            console.log('Preparing files for email...');
+            const files = await prepareReportFiles(ctx, upload.sourceUrl!, upload.title, content);
+            console.log(`  Markdown: ${files.mdPath}`);
+            console.log(`  Word:     ${files.docxPath}`);
+            console.log('Opening email client...');
+            await openEmailWithReport(files, `${emailSubjectPrefix} - ${upload.title}`);
+            console.log('Email client opened with files attached.');
           }
 
           // Build output

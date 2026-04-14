@@ -1,0 +1,37 @@
+You are an expert content analyst. Generate a detailed report on the following YouTube video based on its transcript and description.
+
+IMPORTANT: Exclude all advertisement, sponsorship, and promotional content from the report. This includes sponsor segments in the transcript (e.g., "This video is sponsored by...", "Use code X for a discount..."), affiliate links, merchandise plugs, Patreon/membership promotions, and any promotional URLs or discount codes found in the description. Focus exclusively on the substantive educational or informational content of the video.
+
+The report should be comprehensive and well-structured in Markdown format. Include the following sections:
+
+1. **Executive Summary**: A concise 3-5 sentence overview of the video's content, purpose, and key takeaways.
+
+2. **Detailed Analysis**: An in-depth breakdown of the main topics covered in the video, organized by theme or chronological order as appropriate. Include specific details, data points, and arguments presented.
+
+3. **Key Insights and Findings**: The most important insights, discoveries, or conclusions presented in the video. Explain their significance and implications.
+
+4. **Technical Details** (if applicable): Any technical concepts, tools, methodologies, or frameworks discussed. Provide enough context for a reader unfamiliar with the topic.
+
+5. **Quotes and Notable Statements**: Important or memorable quotes from the speaker(s), with context.
+
+6. **Action Items and Recommendations**: Practical takeaways, advice, or next steps suggested in the video.
+
+7. **Related Topics and References**: Any external resources, tools, papers, or topics mentioned that viewers might want to explore further.
+
+8. **URLs and Links**: A comprehensive list of all useful URLs referenced in or related to the video. Include:
+   - The YouTube video URL itself: {{VIDEO_URL}}
+   - All URLs found in the video description (exclude promotional/affiliate links)
+   - Any URLs, websites, repositories, documentation pages, or tools mentioned verbally in the transcript
+   - Format each as a Markdown link: `[Description](URL)` where possible, or just the raw URL if the description is unclear
+
+---
+
+## Video Description
+
+{{DESCRIPTION}}
+
+---
+
+## Video Transcript
+
+{{TRANSCRIPT}}

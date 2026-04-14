@@ -1,4 +1,7 @@
 import { createRequire } from 'node:module';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 import { v4 as uuidv4 } from 'uuid';
 import type { AppContext } from './context.js';
 import { extractYouTubeEnhanced } from '../services/content-extractor.js';
@@ -148,6 +151,192 @@ export async function getDescription(
   }
 
   return desc;
+}
+
+// ===== Report Generation =====
+
+const REPORT_PROMPT_PATH = path.join(os.homedir(), '.geminirag', 'report-prompt.txt');
+
+const DEFAULT_REPORT_PROMPT = `You are an expert content analyst. Generate a detailed report on the following YouTube video based on its transcript and description.
+
+IMPORTANT: Exclude all advertisement, sponsorship, and promotional content from the report. This includes sponsor segments in the transcript (e.g., "This video is sponsored by...", "Use code X for a discount..."), affiliate links, merchandise plugs, Patreon/membership promotions, and any promotional URLs or discount codes found in the description. Focus exclusively on the substantive educational or informational content of the video.
+
+The report should be comprehensive and well-structured in Markdown format. Include the following sections:
+
+1. **Executive Summary**: A concise 3-5 sentence overview of the video's content, purpose, and key takeaways.
+
+2. **Detailed Analysis**: An in-depth breakdown of the main topics covered in the video, organized by theme or chronological order as appropriate. Include specific details, data points, and arguments presented.
+
+3. **Key Insights and Findings**: The most important insights, discoveries, or conclusions presented in the video. Explain their significance and implications.
+
+4. **Technical Details** (if applicable): Any technical concepts, tools, methodologies, or frameworks discussed. Provide enough context for a reader unfamiliar with the topic.
+
+5. **Quotes and Notable Statements**: Important or memorable quotes from the speaker(s), with context.
+
+6. **Action Items and Recommendations**: Practical takeaways, advice, or next steps suggested in the video.
+
+7. **Related Topics and References**: Any external resources, tools, papers, or topics mentioned that viewers might want to explore further.
+
+8. **URLs and Links**: A comprehensive list of all useful URLs referenced in or related to the video. Include:
+   - The YouTube video URL itself: {{VIDEO_URL}}
+   - All URLs found in the video description (exclude promotional/affiliate links)
+   - Any URLs, websites, repositories, documentation pages, or tools mentioned verbally in the transcript
+   - Format each as a Markdown link: \`[Description](URL)\` where possible, or just the raw URL if the description is unclear
+
+---
+
+## Video Description
+
+{{DESCRIPTION}}
+
+---
+
+## Video Transcript
+
+{{TRANSCRIPT}}`;
+
+/**
+ * Load the report prompt template from ~/.geminirag/report-prompt.txt.
+ * Creates the file with the default prompt if it doesn't exist.
+ */
+function loadReportPrompt(): string {
+  if (!fs.existsSync(REPORT_PROMPT_PATH)) {
+    const dir = path.dirname(REPORT_PROMPT_PATH);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(REPORT_PROMPT_PATH, DEFAULT_REPORT_PROMPT, 'utf-8');
+  }
+  return fs.readFileSync(REPORT_PROMPT_PATH, 'utf-8');
+}
+
+/**
+ * Generate a detailed AI report combining transcript and description.
+ * The prompt is loaded from ~/.geminirag/report-prompt.txt (user-editable).
+ */
+export async function generateReport(
+  ctx: AppContext,
+  url: string
+): Promise<string> {
+  // Fetch transcript
+  const videoId = extractYouTubeVideoId(url);
+  const items = await fetchTranscriptItems(videoId);
+  const transcript = items.map((i) => i.text).join(' ');
+
+  // Fetch description (graceful fallback if API key not configured)
+  let description = '(Description not available — YOUTUBE_DATA_API_KEY not configured)';
+  if (ctx.config.youtubeDataApiKey) {
+    try {
+      description = await getDescription(ctx, url);
+    } catch {
+      description = '(Description could not be fetched)';
+    }
+  }
+
+  // Load and fill prompt template
+  const template = loadReportPrompt();
+  const prompt = template
+    .replace('{{TRANSCRIPT}}', transcript)
+    .replace('{{DESCRIPTION}}', description)
+    .replace('{{VIDEO_URL}}', url);
+
+  // Generate via Gemini
+  const response = await ctx.client.models.generateContent({
+    model: ctx.config.geminiModel,
+    contents: prompt,
+  });
+
+  const report = response.text ?? '';
+  if (!report.trim()) {
+    throw new Error('Report generation returned empty response');
+  }
+
+  return report;
+}
+
+/**
+ * Result of preparing a report for email.
+ */
+export interface EmailReportResult {
+  mdPath: string;
+  docxPath: string;
+  title: string;
+}
+
+/**
+ * Generate a report and save it as both .md and .docx files in a temp directory.
+ * Returns the file paths for the caller to handle (open email client, etc.).
+ */
+export async function prepareReportFiles(
+  ctx: AppContext,
+  url: string,
+  title: string,
+  reportMarkdown?: string
+): Promise<EmailReportResult> {
+  // Generate report if not already provided
+  const markdown = reportMarkdown ?? await generateReport(ctx, url);
+
+  // Sanitize title for filenames
+  const safeTitle = title.replace(/[/\\?%*:|"<>]/g, '_').substring(0, 80);
+
+  // Create temp directory
+  const tmpDir = path.join(os.tmpdir(), `g-ragger-report-${Date.now()}`);
+  fs.mkdirSync(tmpDir, { recursive: true });
+
+  const mdPath = path.join(tmpDir, `${safeTitle}.md`);
+  const docxPath = path.join(tmpDir, `${safeTitle}.docx`);
+
+  // Save markdown
+  fs.writeFileSync(mdPath, markdown, 'utf-8');
+
+  // Convert to docx using pandoc
+  const { execSync } = await import('child_process');
+  try {
+    execSync(`pandoc "${mdPath}" -o "${docxPath}"`, { stdio: 'pipe' });
+  } catch (error) {
+    throw new Error(
+      'Failed to convert report to .docx. Ensure pandoc is installed: brew install pandoc'
+    );
+  }
+
+  return { mdPath, docxPath, title: safeTitle };
+}
+
+/**
+ * Open the system's default email client with the report files attached.
+ * Uses AppleScript on macOS to compose an email with attachments.
+ */
+export async function openEmailWithReport(
+  files: EmailReportResult,
+  subject?: string
+): Promise<void> {
+  const { execSync } = await import('child_process');
+  const emailSubject = subject ?? `YouTube Report - ${files.title}`;
+
+  const applescript = `
+    tell application "Mail"
+      set newMessage to make new outgoing message with properties {subject:"${emailSubject.replace(/"/g, '\\"')}", content:"Please find attached the YouTube video report in both Markdown and Word formats."}
+      tell newMessage
+        make new attachment with properties {file name:POSIX file "${files.docxPath}"}
+        make new attachment with properties {file name:POSIX file "${files.mdPath}"}
+      end tell
+      activate
+    end tell
+  `;
+
+  try {
+    execSync(`osascript -e '${applescript.replace(/'/g, "'\\''")}'`, { stdio: 'pipe' });
+  } catch {
+    // Fallback: try to open Finder showing the files so user can attach manually
+    try {
+      execSync(`open "${path.dirname(files.mdPath)}"`, { stdio: 'pipe' });
+    } catch {
+      // ignore
+    }
+    throw new Error(
+      `Could not open Mail.app automatically. Report files saved at:\n  ${files.docxPath}\n  ${files.mdPath}`
+    );
+  }
 }
 
 /**

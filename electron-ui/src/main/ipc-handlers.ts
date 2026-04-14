@@ -23,6 +23,9 @@ import {
   getNotes,
   getDescription,
   channelScan,
+  generateReport,
+  prepareReportFiles,
+  openEmailWithReport,
 } from '@cli/operations/youtube-ops.js';
 import { updateTags } from '@cli/operations/metadata-ops.js';
 import { getConfigFile, saveConfigFile } from '@cli/operations/config-ops.js';
@@ -242,6 +245,28 @@ export function registerIpcHandlers(): void {
       wrap(async () => {
         const ctx = getContext();
         return getDescription(ctx, input.url);
+      })
+  );
+
+  // --- youtube:getReport ---
+  ipcMain.handle(
+    'youtube:getReport',
+    (_event, input: { url: string }) =>
+      wrap(async () => {
+        const ctx = getContext();
+        return generateReport(ctx, input.url);
+      })
+  );
+
+  // --- youtube:emailReport ---
+  ipcMain.handle(
+    'youtube:emailReport',
+    (_event, input: { url: string; title: string; reportMarkdown?: string }) =>
+      wrap(async () => {
+        const ctx = getContext();
+        const files = await prepareReportFiles(ctx, input.url, input.title, input.reportMarkdown);
+        await openEmailWithReport(files, `YouTube Report - ${input.title}`);
+        return { mdPath: files.mdPath, docxPath: files.docxPath };
       })
   );
 

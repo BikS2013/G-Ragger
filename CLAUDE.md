@@ -127,6 +127,8 @@ Both use the same `AppContext` (config + Gemini client) from `src/operations/con
                 --raw                                       Skip metadata header
                 --description                               Fetch YouTube video description directly
                 --notes                                     Generate AI notes from YouTube transcript
+                --report                                    Generate detailed AI report (transcript + description)
+                --email                                     Send content via system email client (use with --report or --notes)
 
             g-ragger channel-scan <workspace>               Scan YouTube channel
                 --channel <handle|url|id>                   Channel to scan (required)
@@ -161,12 +163,19 @@ Both use the same `AppContext` (config + Gemini client) from `src/operations/con
             DATE_FORMAT             Optional. DD/MM/YYYY (default), MM/DD/YYYY, or YYYY-MM-DD.
             THEME                   Optional. light (default), dark, or system.
 
+        Report prompt file: ~/.geminirag/report-prompt.txt
+            User-editable prompt template for YouTube report generation.
+            Uses {{TRANSCRIPT}} and {{DESCRIPTION}} placeholders.
+            Auto-created with default prompt on first use.
+
         Desktop UI Features (g-ragger ui):
             - Workspace creation, deletion, and browsing in sidebar
             - Content upload via 5-tab dialog (File, Web Page, YouTube, Channel Scan, Note) with tag input
             - Upload browser with DataTable, filter bar, sortable columns
             - Content inspector with resizable dialog
-            - YouTube content modes: Gemini, Transcript, AI Notes, Description
+            - YouTube content modes: Gemini, Transcript, AI Notes, Description, Report
+            - Report mode: AI-generated detailed analysis combining transcript + description
+              (prompt customizable via ~/.geminirag/report-prompt.txt)
             - File download via native Save dialog
             - Workspace query with citations
             - Configuration editor (Settings gear icon)

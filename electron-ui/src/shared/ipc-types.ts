@@ -112,6 +112,14 @@ export interface IpcChannelMap {
     input: { url: string };
     output: string;
   };
+  'youtube:getReport': {
+    input: { url: string };
+    output: string;
+  };
+  'youtube:emailReport': {
+    input: { url: string; title: string; reportMarkdown?: string };
+    output: { mdPath: string; docxPath: string };
+  };
   'workspace:create': {
     input: { name: string };
     output: { name: string; storeName: string };

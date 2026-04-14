@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Download, Copy, Clock, Flag, FileText, ExternalLink, Video, StickyNote, Loader2, Text, Trash2, X, Plus, Tag } from "lucide-react"
+import { Download, Copy, Clock, Flag, FileText, ExternalLink, Video, StickyNote, Loader2, Text, Trash2, X, Plus, Tag, FileBarChart, Mail } from "lucide-react"
 import { useAppStore } from "../store"
 import {
   Dialog,
@@ -93,9 +93,9 @@ export function UploadDetail() {
     message: string
   } | null>(null)
   const [youtubeContent, setYoutubeContent] = useState<string | null>(null)
-  const [youtubeLoading, setYoutubeLoading] = useState<"transcript" | "notes" | "description" | null>(null)
+  const [youtubeLoading, setYoutubeLoading] = useState<"transcript" | "notes" | "description" | "report" | null>(null)
   const [youtubeError, setYoutubeError] = useState<string | null>(null)
-  const [activeContentSource, setActiveContentSource] = useState<"gemini" | "transcript" | "notes" | "description">("gemini")
+  const [activeContentSource, setActiveContentSource] = useState<"gemini" | "transcript" | "notes" | "description" | "report">("gemini")
 
   // Tag editing state
   const [tagInput, setTagInput] = useState("")
@@ -218,6 +218,48 @@ export function UploadDetail() {
       setYoutubeError(err instanceof Error ? err.message : "Failed to fetch description")
     } finally {
       setYoutubeLoading(null)
+    }
+  }
+
+  const handleYoutubeReport = async () => {
+    if (!selectedUpload?.sourceUrl) return
+    setYoutubeLoading("report")
+    setYoutubeError(null)
+    try {
+      const result = await window.api.youtube.getReport(selectedUpload.sourceUrl)
+      if (result.success) {
+        setYoutubeContent(result.data)
+        setActiveContentSource("report")
+      } else {
+        setYoutubeError(result.error)
+      }
+    } catch (err) {
+      setYoutubeError(err instanceof Error ? err.message : "Failed to generate report")
+    } finally {
+      setYoutubeLoading(null)
+    }
+  }
+
+  const [emailSending, setEmailSending] = useState(false)
+
+  const handleEmailContent = async () => {
+    if (!selectedUpload?.sourceUrl) return
+    const visibleContent = activeContentSource === "gemini" ? uploadContent : youtubeContent
+    if (!visibleContent) return
+    setEmailSending(true)
+    try {
+      const result = await window.api.youtube.emailReport(
+        selectedUpload.sourceUrl,
+        selectedUpload.title,
+        visibleContent
+      )
+      if (!result.success) {
+        setYoutubeError(result.error)
+      }
+    } catch (err) {
+      setYoutubeError(err instanceof Error ? err.message : "Failed to open email client")
+    } finally {
+      setEmailSending(false)
     }
   }
 
@@ -477,6 +519,22 @@ export function UploadDetail() {
                   </Button>
                 )
               })()}
+              {isYoutube && (activeContentSource === "gemini" ? uploadContent : youtubeContent) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 gap-1 text-xs text-muted-foreground"
+                  onClick={handleEmailContent}
+                  disabled={emailSending}
+                >
+                  {emailSending ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Mail className="h-3 w-3" />
+                  )}
+                  {emailSending ? "Preparing..." : "Email"}
+                </Button>
+              )}
             </div>
             {isYoutube && (
               <div className="flex items-center gap-1.5">
@@ -535,6 +593,20 @@ export function UploadDetail() {
                     <Text className="h-3 w-3" />
                   )}
                   Description
+                </Button>
+                <Button
+                  variant={activeContentSource === "report" ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 gap-1 text-xs"
+                  disabled={youtubeLoading !== null}
+                  onClick={handleYoutubeReport}
+                >
+                  {youtubeLoading === "report" ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <FileBarChart className="h-3 w-3" />
+                  )}
+                  Report
                 </Button>
               </div>
             )}
