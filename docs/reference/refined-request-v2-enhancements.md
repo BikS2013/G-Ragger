@@ -287,7 +287,7 @@ export interface UploadOptions {
 5. (Recommended) Restrict the API key to YouTube Data API v3 only.
 
 **Configuration loading:**
-- Same priority as existing config: env vars > `.env` > `~/.geminirag/config.json`
+- Same priority as existing config: env vars > `.env` > `~/.g-ragger/config.json`
 - The `YOUTUBE_DATA_API_KEY` is NOT required at tool startup. It is only required when the `channel-scan` command is invoked. If missing at that point, the tool throws: `"YOUTUBE_DATA_API_KEY is required for channel scanning. Obtain it from https://console.cloud.google.com/ by enabling the YouTube Data API v3 and creating an API key."`
 - If `YOUTUBE_DATA_API_KEY_EXPIRATION` is set and within 7 days, a warning is printed (same pattern as `GEMINI_API_KEY_EXPIRATION`).
 
@@ -308,7 +308,7 @@ export interface AppConfig {
 }
 ```
 
-### 5.3 Updated Config File Format (`~/.geminirag/config.json`)
+### 5.3 Updated Config File Format (`~/.g-ragger/config.json`)
 
 ```json
 {

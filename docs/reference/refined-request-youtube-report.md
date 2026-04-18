@@ -9,7 +9,7 @@ The AI prompt used to generate the report is stored in an external text file tha
 ## Functional Requirements
 
 ### FR-1: Report Generation Prompt File
-- Store the default report prompt at `~/.geminirag/report-prompt.txt`
+- Store the default report prompt at `~/.g-ragger/report-prompt.txt`
 - If the file does not exist, create it with the default prompt on first use
 - The prompt must include placeholders for `{{TRANSCRIPT}}` and `{{DESCRIPTION}}`
 - The prompt instructs the AI to produce a detailed analytical report
@@ -17,7 +17,7 @@ The AI prompt used to generate the report is stored in an external text file tha
 ### FR-2: YouTube Operations — generateReport Function
 - New function in `src/operations/youtube-ops.ts`: `generateReport(ctx, url)`
 - Fetches transcript and description (reusing existing `getTranscript` and `getDescription`)
-- Loads the prompt template from `~/.geminirag/report-prompt.txt`
+- Loads the prompt template from `~/.g-ragger/report-prompt.txt`
 - Substitutes `{{TRANSCRIPT}}` and `{{DESCRIPTION}}` placeholders
 - Sends the composed prompt to Gemini for generation
 - Returns the generated report text
@@ -48,7 +48,7 @@ The AI prompt used to generate the report is stored in an external text file tha
 2. Clicking Report generates an AI report combining transcript + description
 3. The report is displayed in the same content area
 4. The Copy button copies the report text
-5. The prompt file is at `~/.geminirag/report-prompt.txt` and is user-editable
+5. The prompt file is at `~/.g-ragger/report-prompt.txt` and is user-editable
 6. If the prompt file doesn't exist, it's created with a sensible default
 7. Changing the prompt file changes subsequent report output (no app restart needed)
 8. Report generation shows a loading spinner during processing
@@ -61,7 +61,7 @@ The AI prompt used to generate the report is stored in an external text file tha
 
 ## Resolved Decisions
 
-1. **Prompt file location**: `~/.geminirag/report-prompt.txt` (same config directory as other settings)
+1. **Prompt file location**: `~/.g-ragger/report-prompt.txt` (same config directory as other settings)
 2. **Prompt placeholders**: `{{TRANSCRIPT}}` and `{{DESCRIPTION}}` — simple mustache-style
 3. **Fallback when description unavailable**: If YouTube Data API key is not configured, the report uses transcript only and notes the description was unavailable
 4. **Prompt file creation**: Auto-create with default prompt on first use (this is NOT a config fallback — it's a template file, similar to how text editors create default config files)

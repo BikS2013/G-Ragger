@@ -15,7 +15,7 @@ interface WindowState {
   isMaximized?: boolean
 }
 
-const STATE_FILE = path.join(os.homedir(), '.geminirag', 'window-state.json')
+const STATE_FILE = path.join(os.homedir(), '.g-ragger', 'window-state.json')
 
 function loadWindowState(): WindowState {
   try {

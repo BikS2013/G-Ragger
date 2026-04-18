@@ -134,7 +134,7 @@ Given the absence of confirmed `string_list_value` filter support, flags **must 
 | Metadata Layer | Storage | Used For | Filterable At Query Time |
 |----------------|---------|----------|--------------------------|
 | Gemini-side | File Search Store | `source_type`, `source_url` | Yes (string_value equality confirmed) |
-| Local registry | `~/.geminirag/registry.json` | `flags`, `expiration_date`, `title` | Yes (client-side, after results returned) |
+| Local registry | `~/.g-ragger/registry.json` | `flags`, `expiration_date`, `title` | Yes (client-side, after results returned) |
 
 This decision is consistent with the immutable nature of Gemini metadata. Since flags are mutable (users add/remove flags over time), they would need delete+re-upload on every flag change regardless. Keeping flags local avoids both the immutability problem and the unconfirmed filter support problem.
 

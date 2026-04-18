@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 
-const CONFIG_DIR = path.join(os.homedir(), '.geminirag');
+const CONFIG_DIR = path.join(os.homedir(), '.g-ragger');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 
 /**

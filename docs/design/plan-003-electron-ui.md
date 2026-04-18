@@ -691,7 +691,7 @@ End-to-end testing, visual polish, error handling review, and final verification
 
 ### Acceptance Criteria (from refined request)
 
-- [ ] AC-01: Launch app, see all workspaces from `~/.geminirag/registry.json`, select one
+- [ ] AC-01: Launch app, see all workspaces from `~/.g-ragger/registry.json`, select one
 - [ ] AC-02: View uploads, filter by source type/flags/expiration, sort by date
 - [ ] AC-03: Click upload, see metadata + content from Gemini
 - [ ] AC-04: Download content via native Save dialog

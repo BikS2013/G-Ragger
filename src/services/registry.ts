@@ -3,12 +3,12 @@ import path from 'node:path';
 import os from 'node:os';
 import { Registry, WorkspaceData, UploadEntry } from '../types/index.js';
 
-const REGISTRY_DIR = path.join(os.homedir(), '.geminirag');
+const REGISTRY_DIR = path.join(os.homedir(), '.g-ragger');
 const REGISTRY_PATH = path.join(REGISTRY_DIR, 'registry.json');
 const REGISTRY_TMP_PATH = path.join(REGISTRY_DIR, 'registry.json.tmp');
 
 /**
- * Load the registry from ~/.geminirag/registry.json.
+ * Load the registry from ~/.g-ragger/registry.json.
  * Creates the directory and an empty registry file if they don't exist.
  *
  * @returns The current registry state

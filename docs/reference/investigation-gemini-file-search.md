@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-The Google Gemini File Search API (via the `@google/genai` TypeScript SDK) provides a fully managed RAG system that handles chunking, embedding, and semantic search -- eliminating the need for external vector databases. The recommended approach is to build a TypeScript CLI using **Commander.js** for command parsing, the **`@google/genai` SDK** for all Gemini interactions, a **local JSON registry** at `~/.geminirag/registry.json` for mutable metadata, and lightweight extraction libraries (`@mozilla/readability` + `turndown` for web pages, `youtube-transcript` for YouTube transcripts). Custom metadata set at import time on the Gemini side (source_type, source_url) enables query-time filtering, while mutable fields (title, flags, expiration) live in the local registry.
+The Google Gemini File Search API (via the `@google/genai` TypeScript SDK) provides a fully managed RAG system that handles chunking, embedding, and semantic search -- eliminating the need for external vector databases. The recommended approach is to build a TypeScript CLI using **Commander.js** for command parsing, the **`@google/genai` SDK** for all Gemini interactions, a **local JSON registry** at `~/.g-ragger/registry.json` for mutable metadata, and lightweight extraction libraries (`@mozilla/readability` + `turndown` for web pages, `youtube-transcript` for YouTube transcripts). Custom metadata set at import time on the Gemini side (source_type, source_url) enables query-time filtering, while mutable fields (title, flags, expiration) live in the local registry.
 
 ---
 
@@ -250,7 +250,7 @@ The Gemini File Search API allows custom metadata at import time but metadata is
 | Layer | Storage | Content | Mutable |
 |-------|---------|---------|---------|
 | **Gemini-side** | File Search Store | `source_type`, `source_url` | No (set at import) |
-| **Local registry** | `~/.geminirag/registry.json` | All fields (id, document_name, title, timestamp, source_type, source_url, expiration_date, flags) | Yes (title, expiration, flags) |
+| **Local registry** | `~/.g-ragger/registry.json` | All fields (id, document_name, title, timestamp, source_type, source_url, expiration_date, flags) | Yes (title, expiration, flags) |
 
 ### Why This Split
 

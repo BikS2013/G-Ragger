@@ -100,20 +100,20 @@
 
 | ID | Requirement | Priority | Status |
 |----|-------------|----------|--------|
-| FR-41 | Configuration loaded from environment variables, `.env` file, or config file (`~/.geminirag/config.json`) | Must | Pending |
+| FR-41 | Configuration loaded from environment variables, `.env` file, or config file (`~/.g-ragger/config.json`) | Must | Pending |
 | FR-42 | Priority: environment variables > `.env` file > config file | Must | Pending |
 | FR-43 | Missing `GEMINI_API_KEY` raises clear error with instructions | Must | Pending |
 | FR-44 | Missing `GEMINI_MODEL` raises clear error | Must | Pending |
 | FR-45 | No fallback or default values for any configuration setting | Must | Pending |
 | FR-46 | Support `GEMINI_API_KEY_EXPIRATION` field; warn when within 7 days of expiration | Should | Pending |
-| FR-47 | Local registry stored at `~/.geminirag/registry.json` | Must | Pending |
+| FR-47 | Local registry stored at `~/.g-ragger/registry.json` | Must | Pending |
 
 ---
 
 ## Feature Descriptions
 
 ### Workspace Management
-A workspace is a named container backed by a Gemini File Search store. Each workspace holds uploaded documents that are indexed for semantic search. Workspaces are tracked in a local registry (`~/.geminirag/registry.json`) that maps workspace names to their Gemini store resource names and holds all upload metadata. Creating a workspace provisions a new Gemini store; deleting a workspace removes the Gemini store (with `force: true`) and all local registry data.
+A workspace is a named container backed by a Gemini File Search store. Each workspace holds uploaded documents that are indexed for semantic search. Workspaces are tracked in a local registry (`~/.g-ragger/registry.json`) that maps workspace names to their Gemini store resource names and holds all upload metadata. Creating a workspace provisions a new Gemini store; deleting a workspace removes the Gemini store (with `force: true`) and all local registry data.
 
 ### Content Upload
 The tool supports four content source types: disk files, web pages, YouTube videos, and personal notes. Each upload follows a pipeline: content extraction (source-specific), upload to the Gemini File Search store (with custom metadata), and registration in the local registry. The upload flow handles known SDK bugs: polling bug #1211 (check initial response for document name; hard 120s timeout) and 503 errors for large files (fallback to Files API + Import pathway).
@@ -125,7 +125,7 @@ Gemini-side metadata (set at upload time, immutable): `source_type` and `source_
 Natural language queries are routed through the Gemini `generateContent` API with the workspace's File Search store as a tool. Multi-workspace queries pass multiple store names. Gemini-side metadata filters (source_type) are applied at query time; local-only filters (flags, expiration) are applied client-side after results are returned. Citations are extracted from grounding metadata and displayed with document titles and text excerpts.
 
 ### Configuration
-Configuration follows a strict no-fallback policy. All required settings (`GEMINI_API_KEY`, `GEMINI_MODEL`) must be explicitly provided via environment variables, `.env` file, or `~/.geminirag/config.json`. Missing values result in descriptive exceptions. The API key expiration field is optional but recommended for proactive renewal warnings.
+Configuration follows a strict no-fallback policy. All required settings (`GEMINI_API_KEY`, `GEMINI_MODEL`) must be explicitly provided via environment variables, `.env` file, or `~/.g-ragger/config.json`. Missing values result in descriptive exceptions. The API key expiration field is optional but recommended for proactive renewal warnings.
 
 ---
 
@@ -187,7 +187,7 @@ Configuration follows a strict no-fallback policy. All required settings (`GEMIN
 | FR-82 | New optional config: `YOUTUBE_DATA_API_KEY` -- required only when `channel-scan` command is invoked | Must | Pending |
 | FR-83 | Lazy validation: `YOUTUBE_DATA_API_KEY` is not validated at startup; throws only when `channel-scan` is invoked without it | Must | Pending |
 | FR-84 | New optional config: `YOUTUBE_DATA_API_KEY_EXPIRATION` -- warns when within 7 days (same pattern as `GEMINI_API_KEY_EXPIRATION`) | Should | Pending |
-| FR-85 | Config loaded from same priority chain: env vars > `.env` > `~/.geminirag/config.json` | Must | Pending |
+| FR-85 | Config loaded from same priority chain: env vars > `.env` > `~/.g-ragger/config.json` | Must | Pending |
 
 ### Dependency Changes (v2)
 
@@ -320,7 +320,7 @@ All new YouTube uploads produce structured Markdown documents containing the vid
 | FR-148 | CLI `get --description` fetches YouTube video description directly via Data API | Must | Complete |
 | FR-149 | CLI `get --notes` generates AI notes from YouTube transcript directly | Must | Complete |
 | FR-150 | Delete upload from UI: removes from Gemini and local registry with confirmation | Must | Complete |
-| FR-151 | Configuration editor in UI: view/edit ~/.geminirag/config.json via Settings dialog | Must | Complete |
+| FR-151 | Configuration editor in UI: view/edit ~/.g-ragger/config.json via Settings dialog | Must | Complete |
 | FR-152 | Config save re-initializes service bridge to pick up new values | Must | Complete |
 | FR-153 | CLI filter by YouTube channel name (channel=text, case-insensitive substring) | Must | Complete |
 | FR-154 | CLI filter by publish date range (published_from=YYYY-MM-DD, published_to=YYYY-MM-DD) | Must | Complete |
@@ -330,7 +330,7 @@ All new YouTube uploads produce structured Markdown documents containing the vid
 | FR-158 | Dark theme support (light/dark/system via Settings, THEME config key) | Must | Complete |
 | FR-159 | Configurable date format (DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD via Settings, DATE_FORMAT config key) | Must | Complete |
 | FR-160 | YouTube uploads show publish date in table Date column; others show upload date | Must | Complete |
-| FR-161 | Window size/position persisted to ~/.geminirag/window-state.json | Should | Complete |
+| FR-161 | Window size/position persisted to ~/.g-ragger/window-state.json | Should | Complete |
 | FR-162 | Upload detail dialog size persisted in localStorage | Should | Complete |
 | FR-163 | App renamed to G-Ragger (title bar, header, dialogs, package.json) | Must | Complete |
 | FR-164 | Uploads/Ask toggle moved to header bar alongside Add Content and Settings | Must | Complete |
@@ -355,7 +355,7 @@ All new YouTube uploads produce structured Markdown documents containing the vid
 ## Electron UI Feature Descriptions
 
 ### Workspace Explorer
-The Electron UI sidebar displays all GeminiRAG workspaces loaded from `~/.geminirag/registry.json`. Each workspace entry shows its name, creation date, and total upload count. Selecting a workspace loads its uploads in the main content area. Workspace statistics (upload breakdown by source type, expired/expiring-soon counts) are computed from the workspace data and displayed alongside the selection.
+The Electron UI sidebar displays all GeminiRAG workspaces loaded from `~/.g-ragger/registry.json`. Each workspace entry shows its name, creation date, and total upload count. Selecting a workspace loads its uploads in the main content area. Workspace statistics (upload breakdown by source type, expired/expiring-soon counts) are computed from the workspace data and displayed alongside the selection.
 
 ### Upload Browser
 The upload browser displays all uploads in the selected workspace as an interactive data table powered by @tanstack/react-table. Columns include shortened ID, title, source type (badge), date, flags (colored badges), and expiration status (color-coded indicators). A filter bar above the table provides dropdowns for source type, flags, and expiration status filtering. Column headers are clickable for sorting. Clicking a table row opens the upload detail view.
@@ -431,7 +431,7 @@ All upload IPC handlers follow the same pattern: validate input, extract content
 
 ### Upload Tags Feature Description
 
-Upload tags are user-defined string labels attached to uploads for flexible categorization and retrieval. Unlike the fixed-enum `flags` field (`completed | urgent | inactive`), tags are free-form strings normalized to lowercase (e.g., `"machine-learning"`, `"q3-review"`, `"competitor-analysis"`). Tags are stored in both the local registry (`~/.geminirag/registry.json`) and in Gemini custom metadata using `stringListValue` to enable future server-side filtering.
+Upload tags are user-defined string labels attached to uploads for flexible categorization and retrieval. Unlike the fixed-enum `flags` field (`completed | urgent | inactive`), tags are free-form strings normalized to lowercase (e.g., `"machine-learning"`, `"q3-review"`, `"competitor-analysis"`). Tags are stored in both the local registry (`~/.g-ragger/registry.json`) and in Gemini custom metadata using `stringListValue` to enable future server-side filtering.
 
 Tag filtering uses OR semantics: when multiple tag filters are specified, an upload matches if it has ANY of the specified tags. This differs from the AND logic used for other filter types. The tag filter group itself is ANDed with other filter groups (e.g., "uploads tagged 'ml' OR 'finance' AND source_type='web'").
 

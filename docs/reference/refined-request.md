@@ -147,12 +147,12 @@ GeminiRAG is a TypeScript CLI tool that provides workspace-based document manage
 
 ### Configuration Rules
 
-- Configuration MUST be loaded from environment variables or a config file (e.g., `~/.geminirag/config.json` or `.env`).
+- Configuration MUST be loaded from environment variables or a config file (e.g., `~/.g-ragger/config.json` or `.env`).
 - Priority: environment variables > `.env` file > config file.
 - If `GEMINI_API_KEY` is not provided, the tool MUST raise a clear error with instructions on how to obtain and set the key. No fallback or default values.
 - If `GEMINI_MODEL` is not provided, the tool MUST raise a clear error. No fallback or default values.
 - The config file SHOULD support a `GEMINI_API_KEY_EXPIRATION` field (ISO 8601 date) so the tool can warn the user when the API key is approaching expiration.
-- The local registry of workspaces and uploads MUST be stored at `~/.geminirag/registry.json`.
+- The local registry of workspaces and uploads MUST be stored at `~/.g-ragger/registry.json`.
 
 ---
 

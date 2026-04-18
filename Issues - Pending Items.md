@@ -16,7 +16,7 @@
 
 ### Low (Test Suite)
 
-18. **Config test `GEMINI_MODEL` missing tests fail when `~/.geminirag/config.json` has GEMINI_MODEL**: The `test-config.ts` tests for "throws when GEMINI_MODEL is missing" and "throws with descriptive message for missing model" fail because `withCleanEnv()` only clears environment variables but does not prevent `loadConfig()` from reading GEMINI_MODEL from the config file at `~/.geminirag/config.json`. The test should either mock the config file or temporarily rename it during these tests.
+18. **Config test `GEMINI_MODEL` missing tests fail when `~/.g-ragger/config.json` has GEMINI_MODEL**: The `test-config.ts` tests for "throws when GEMINI_MODEL is missing" and "throws with descriptive message for missing model" fail because `withCleanEnv()` only clears environment variables but does not prevent `loadConfig()` from reading GEMINI_MODEL from the config file at `~/.g-ragger/config.json`. The test should either mock the config file or temporarily rename it during these tests.
 
 ### Medium (V2 Review)
 

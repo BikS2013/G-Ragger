@@ -1,6 +1,6 @@
 /**
  * Theme management — light, dark, or system preference.
- * Stored in localStorage and synced from ~/.geminirag/config.json via Settings.
+ * Stored in localStorage and synced from ~/.g-ragger/config.json via Settings.
  */
 
 export type ThemeOption = "light" | "dark" | "system"

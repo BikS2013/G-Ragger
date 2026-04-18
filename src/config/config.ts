@@ -17,7 +17,7 @@ export function loadConfig(): AppConfig {
   dotenv.config();
 
   // Step 2: Load config file
-  const configFilePath = path.join(os.homedir(), '.geminirag', 'config.json');
+  const configFilePath = path.join(os.homedir(), '.g-ragger', 'config.json');
   let fileConfig: Record<string, string> = {};
   if (fs.existsSync(configFilePath)) {
     fileConfig = JSON.parse(fs.readFileSync(configFilePath, 'utf-8'));
@@ -38,7 +38,7 @@ export function loadConfig(): AppConfig {
       'Set it using one of the following methods:\n' +
       '  1. Environment variable: export GEMINI_API_KEY="your-key"\n' +
       '  2. .env file in project root: GEMINI_API_KEY=your-key\n' +
-      '  3. Config file at ~/.geminirag/config.json: { "GEMINI_API_KEY": "your-key" }'
+      '  3. Config file at ~/.g-ragger/config.json: { "GEMINI_API_KEY": "your-key" }'
     );
   }
 
@@ -49,7 +49,7 @@ export function loadConfig(): AppConfig {
       'Set it using one of the following methods:\n' +
       '  1. Environment variable: export GEMINI_MODEL="gemini-2.5-flash"\n' +
       '  2. .env file in project root: GEMINI_MODEL=gemini-2.5-flash\n' +
-      '  3. Config file at ~/.geminirag/config.json: { "GEMINI_MODEL": "gemini-2.5-flash" }'
+      '  3. Config file at ~/.g-ragger/config.json: { "GEMINI_MODEL": "gemini-2.5-flash" }'
     );
   }
 

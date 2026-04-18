@@ -155,7 +155,7 @@ export async function getDescription(
 
 // ===== Report Generation =====
 
-const REPORT_PROMPT_PATH = path.join(os.homedir(), '.geminirag', 'report-prompt.txt');
+const REPORT_PROMPT_PATH = path.join(os.homedir(), '.g-ragger', 'report-prompt.txt');
 
 const DEFAULT_REPORT_PROMPT = `You are an expert content analyst. Generate a detailed report on the following YouTube video based on its transcript and description.
 
@@ -196,7 +196,7 @@ The report should be comprehensive and well-structured in Markdown format. Inclu
 {{TRANSCRIPT}}`;
 
 /**
- * Load the report prompt template from ~/.geminirag/report-prompt.txt.
+ * Load the report prompt template from ~/.g-ragger/report-prompt.txt.
  * Creates the file with the default prompt if it doesn't exist.
  */
 function loadReportPrompt(): string {
@@ -212,7 +212,7 @@ function loadReportPrompt(): string {
 
 /**
  * Generate a detailed AI report combining transcript and description.
- * The prompt is loaded from ~/.geminirag/report-prompt.txt (user-editable).
+ * The prompt is loaded from ~/.g-ragger/report-prompt.txt (user-editable).
  */
 export async function generateReport(
   ctx: AppContext,
@@ -380,7 +380,7 @@ export async function channelScan(
         'Set it using one of the following methods:\n' +
         '  1. Environment variable: export YOUTUBE_DATA_API_KEY="your-key"\n' +
         '  2. .env file in project root: YOUTUBE_DATA_API_KEY=your-key\n' +
-        '  3. Config file at ~/.geminirag/config.json: { "YOUTUBE_DATA_API_KEY": "your-key" }'
+        '  3. Config file at ~/.g-ragger/config.json: { "YOUTUBE_DATA_API_KEY": "your-key" }'
     );
   }
   const apiKey = ctx.config.youtubeDataApiKey;

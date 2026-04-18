@@ -85,7 +85,7 @@ GeminiRAG is a TypeScript CLI tool that provides workspace-based document manage
 +------------------------------------+    +--------------------------+
 |  External Dependencies             |    |  Local Storage           |
 |                                    |    |                          |
-|  @google/genai SDK                 |    |  ~/.geminirag/           |
+|  @google/genai SDK                 |    |  ~/.g-ragger/           |
 |  jsdom + Readability + Turndown    |    |    registry.json         |
 |  youtube-transcript                |    |    config.json (optional) |
 |  Native fetch (Node.js 18+)       |    |    .env (optional)       |
@@ -325,7 +325,7 @@ GeminiRAG/
 
 #### `src/config/config.ts` -- Configuration
 
-- Load configuration from three sources with priority: env vars > `.env` > `~/.geminirag/config.json`
+- Load configuration from three sources with priority: env vars > `.env` > `~/.g-ragger/config.json`
 - Throw descriptive exceptions for missing required values
 - Check API key expiration and emit warning if within 7 days
 - Export `loadConfig(): AppConfig` function
@@ -356,7 +356,7 @@ GeminiRAG/
 
 #### `src/services/registry.ts` -- Local Registry
 
-- JSON file CRUD at `~/.geminirag/registry.json`
+- JSON file CRUD at `~/.g-ragger/registry.json`
 - Atomic writes (write to temp file, rename)
 - Auto-create directory and empty registry on first use
 - Workspace operations: add, remove, get, list
@@ -577,7 +577,7 @@ export interface ListingOptions {
 
 ## 6. Local Registry Schema
 
-The registry is stored at `~/.geminirag/registry.json`. It is the single mutable metadata store for the application.
+The registry is stored at `~/.g-ragger/registry.json`. It is the single mutable metadata store for the application.
 
 ### 6.1 JSON Schema
 
@@ -630,8 +630,8 @@ The registry is stored at `~/.geminirag/registry.json`. It is the single mutable
 
 ```
 1. Serialize registry to JSON string
-2. Write to ~/.geminirag/registry.json.tmp
-3. Rename ~/.geminirag/registry.json.tmp -> ~/.geminirag/registry.json
+2. Write to ~/.g-ragger/registry.json.tmp
+3. Rename ~/.g-ragger/registry.json.tmp -> ~/.g-ragger/registry.json
 ```
 
 This ensures that a crash during write does not corrupt the registry file. The rename operation is atomic on POSIX filesystems.
@@ -1089,7 +1089,7 @@ END FUNCTION
 
 | Condition | Error Message |
 |-----------|---------------|
-| Missing `GEMINI_API_KEY` | `"GEMINI_API_KEY is required. Obtain it from https://aistudio.google.com/apikey and set it as an environment variable, in .env file, or in ~/.geminirag/config.json"` |
+| Missing `GEMINI_API_KEY` | `"GEMINI_API_KEY is required. Obtain it from https://aistudio.google.com/apikey and set it as an environment variable, in .env file, or in ~/.g-ragger/config.json"` |
 | Missing `GEMINI_MODEL` | `"GEMINI_MODEL is required. Set it in config or environment. Recommended: gemini-2.5-flash or gemini-2.5-flash-lite"` |
 
 #### Validation Errors (thrown by `validation.ts` or command handlers)
@@ -1183,10 +1183,10 @@ END FUNCTION
 Priority (highest wins):
   1. Environment variables (GEMINI_API_KEY, GEMINI_MODEL, GEMINI_API_KEY_EXPIRATION)
   2. .env file (in current working directory)
-  3. Config file (~/.geminirag/config.json)
+  3. Config file (~/.g-ragger/config.json)
 ```
 
-### 10.2 Config File Format (`~/.geminirag/config.json`)
+### 10.2 Config File Format (`~/.g-ragger/config.json`)
 
 ```json
 {
@@ -1204,7 +1204,7 @@ FUNCTION loadConfig(): AppConfig
     dotenv.config()
 
     // Step 2: Load config file
-    configFilePath = path.join(os.homedir(), '.geminirag', 'config.json')
+    configFilePath = path.join(os.homedir(), '.g-ragger', 'config.json')
     fileConfig = {}
     IF fs.existsSync(configFilePath):
         fileConfig = JSON.parse(fs.readFileSync(configFilePath, 'utf-8'))
@@ -1267,7 +1267,7 @@ export function loadConfig(): AppConfig;
 
 ```typescript
 /**
- * Load the registry from ~/.geminirag/registry.json.
+ * Load the registry from ~/.g-ragger/registry.json.
  * Creates the directory and an empty registry file if they don't exist.
  *
  * @returns The current registry state
@@ -1645,7 +1645,7 @@ These units are designed to be built in parallel by independent developers. Each
 **Deliverables**:
 - `loadConfig()` function implementing priority-based loading
 - dotenv integration
-- Config file reading from `~/.geminirag/config.json`
+- Config file reading from `~/.g-ragger/config.json`
 - Missing value exceptions (no fallbacks)
 - API key expiration warning
 
@@ -1662,7 +1662,7 @@ These units are designed to be built in parallel by independent developers. Each
 **Deliverables**:
 - All registry CRUD functions as specified in Section 11.2
 - Atomic write strategy (temp + rename)
-- Auto-creation of `~/.geminirag/` directory and empty registry
+- Auto-creation of `~/.g-ragger/` directory and empty registry
 - Workspace and upload validation (existence checks)
 
 **Test script**: `test_scripts/test-registry.ts`
@@ -1868,7 +1868,7 @@ Units 2, 3, 4, 5, and 6 can all be developed in parallel after Unit 1 is committ
 
 ### ADR-04: JSON File as Local Registry (Not SQLite)
 
-**Decision**: Use a plain JSON file at `~/.geminirag/registry.json` as the local registry.
+**Decision**: Use a plain JSON file at `~/.g-ragger/registry.json` as the local registry.
 
 **Rationale**:
 - Single-user tool with at most 10 workspaces and typically <1000 uploads per workspace
@@ -2909,7 +2909,7 @@ return config;
 
 **Lazy validation**: `YOUTUBE_DATA_API_KEY` is NOT validated at config load time. It is only validated when `channel-scan` command is invoked. The error message includes instructions for obtaining the key.
 
-**Config file format** (`~/.geminirag/config.json`):
+**Config file format** (`~/.g-ragger/config.json`):
 ```json
 {
   "GEMINI_API_KEY": "AIza...",
@@ -3262,7 +3262,7 @@ Unit V2-A (Foundation)
 +------------------------------------+    +--------------------------+
 |  External Dependencies             |    |  Local Storage           |
 |                                    |    |                          |
-|  @google/genai SDK                 |    |  ~/.geminirag/           |
+|  @google/genai SDK                 |    |  ~/.g-ragger/           |
 |  jsdom + Readability + Turndown    |    |    registry.json         |
 |  youtube-transcript-plus (NEW v2)  |    |    config.json (optional) |
 |  Native fetch (Node.js 18+)       |    |    .env (optional)       |

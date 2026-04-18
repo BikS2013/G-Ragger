@@ -1,6 +1,6 @@
 /**
  * Date formatting utility that reads DATE_FORMAT from localStorage
- * (synced from ~/.geminirag/config.json via the Settings dialog).
+ * (synced from ~/.g-ragger/config.json via the Settings dialog).
  *
  * Supported formats:
  *   "DD/MM/YYYY" (European, default)

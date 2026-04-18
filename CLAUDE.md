@@ -154,7 +154,7 @@ Both use the same `AppContext` (config + Gemini client) from `src/operations/con
             published_from=YYYY-MM-DD           (client-side, YouTube publish date >= value)
             published_to=YYYY-MM-DD             (client-side, YouTube publish date <= value)
 
-        Configuration (priority: env vars > .env > ~/.geminirag/config.json):
+        Configuration (priority: env vars > .env > ~/.g-ragger/config.json):
             GEMINI_API_KEY          Required. Google AI Studio API key.
             GEMINI_MODEL            Required. e.g., gemini-2.5-flash
             GEMINI_API_KEY_EXPIRATION  Optional. YYYY-MM-DD. Warns when near expiry.
@@ -163,7 +163,7 @@ Both use the same `AppContext` (config + Gemini client) from `src/operations/con
             DATE_FORMAT             Optional. DD/MM/YYYY (default), MM/DD/YYYY, or YYYY-MM-DD.
             THEME                   Optional. light (default), dark, or system.
 
-        Report prompt file: ~/.geminirag/report-prompt.txt
+        Report prompt file: ~/.g-ragger/report-prompt.txt
             User-editable prompt template for YouTube report generation.
             Uses {{TRANSCRIPT}} and {{DESCRIPTION}} placeholders.
             Auto-created with default prompt on first use.
@@ -175,7 +175,7 @@ Both use the same `AppContext` (config + Gemini client) from `src/operations/con
             - Content inspector with resizable dialog
             - YouTube content modes: Gemini, Transcript, AI Notes, Description, Report
             - Report mode: AI-generated detailed analysis combining transcript + description
-              (prompt customizable via ~/.geminirag/report-prompt.txt)
+              (prompt customizable via ~/.g-ragger/report-prompt.txt)
             - File download via native Save dialog
             - Workspace query with citations
             - Configuration editor (Settings gear icon)
@@ -212,8 +212,8 @@ Both use the same `AppContext` (config + Gemini client) from `src/operations/con
             npx tsx test_scripts/test-electron-build.ts
             npx tsx test_scripts/test-ipc-types.ts
 
-        Registry location: ~/.geminirag/registry.json
-        Config file: ~/.geminirag/config.json
+        Registry location: ~/.g-ragger/registry.json
+        Config file: ~/.g-ragger/config.json
         Prerequisites: Node.js 18+, Gemini API key from https://aistudio.google.com/apikey
 
         Key directories:

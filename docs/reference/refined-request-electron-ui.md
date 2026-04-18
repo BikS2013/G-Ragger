@@ -176,7 +176,7 @@ The preload script exposes a typed API object. Below is the contract for all IPC
 
 | ID | Criterion |
 |----|-----------|
-| AC-01 | User can launch the Electron app, see all workspaces from `~/.geminirag/registry.json`, and select one. |
+| AC-01 | User can launch the Electron app, see all workspaces from `~/.g-ragger/registry.json`, and select one. |
 | AC-02 | User can view all uploads in a workspace, filter by source type, flags, and expiration status, and sort by date. |
 | AC-03 | User can click an upload and see its full metadata and content fetched from Gemini. |
 | AC-04 | User can download the content of an upload to a local file via a native Save dialog. |
@@ -193,8 +193,8 @@ The preload script exposes a typed API object. Below is the contract for all IPC
 | ID | Assumption |
 |----|-----------|
 | A-01 | The user has Node.js 18+ installed. |
-| A-02 | The user has a valid `~/.geminirag/config.json` or environment variables with `GEMINI_API_KEY` and `GEMINI_MODEL`. |
-| A-03 | The `~/.geminirag/registry.json` file exists (created by prior CLI usage). If not, the app shows an empty workspace list. |
+| A-02 | The user has a valid `~/.g-ragger/config.json` or environment variables with `GEMINI_API_KEY` and `GEMINI_MODEL`. |
+| A-03 | The `~/.g-ragger/registry.json` file exists (created by prior CLI usage). If not, the app shows an empty workspace list. |
 | A-04 | The Electron app is for local development/personal use -- no packaging for distribution (e.g., DMG/installer) is required in the first version. |
 | A-05 | The existing service layer functions (`services/registry.ts`, `services/file-search.ts`, etc.) are stable and can be imported as-is by the Electron main process. |
 | A-06 | "Download" means saving the text content retrieved via Gemini grounding to a local file, not downloading the original binary file (since originals may be web pages, YouTube transcripts, or notes that only exist as indexed Gemini documents). |

@@ -151,12 +151,12 @@ npx tsx src/cli.ts --help
 
 | File | Purpose |
 |------|---------|
-| `src/config/config.ts` | Config loading: env vars > `.env` > `~/.geminirag/config.json`. Throws on missing required values. API key expiration warning. |
-| `src/services/registry.ts` | Local registry CRUD at `~/.geminirag/registry.json`. Atomic writes (write to temp, rename). |
+| `src/config/config.ts` | Config loading: env vars > `.env` > `~/.g-ragger/config.json`. Throws on missing required values. API key expiration warning. |
+| `src/services/registry.ts` | Local registry CRUD at `~/.g-ragger/registry.json`. Atomic writes (write to temp, rename). |
 
 ### Config Loading Rules (from Refined Request)
 
-1. Priority: environment variables > `.env` file > `~/.geminirag/config.json`
+1. Priority: environment variables > `.env` file > `~/.g-ragger/config.json`
 2. `GEMINI_API_KEY` -- **required**; throw: "GEMINI_API_KEY is required. Obtain it from https://aistudio.google.com/apikey"
 3. `GEMINI_MODEL` -- **required**; throw: "GEMINI_MODEL is required. Set it in config or environment."
 4. `GEMINI_API_KEY_EXPIRATION` -- optional; if set and within 7 days, print warning at startup
@@ -166,7 +166,7 @@ npx tsx src/cli.ts --help
 
 | Operation | Method | Notes |
 |-----------|--------|-------|
-| Load registry | `loadRegistry()` | Creates `~/.geminirag/` dir and empty registry if not exists |
+| Load registry | `loadRegistry()` | Creates `~/.g-ragger/` dir and empty registry if not exists |
 | Save registry | `saveRegistry(registry)` | Atomic write: write to `.tmp`, rename to `registry.json` |
 | Add workspace | `addWorkspace(name, storeName)` | Adds entry, saves |
 | Remove workspace | `removeWorkspace(name)` | Removes entry + all uploads, saves |
@@ -181,7 +181,7 @@ npx tsx src/cli.ts --help
 - [ ] Missing `GEMINI_API_KEY` throws descriptive error with instructions
 - [ ] Missing `GEMINI_MODEL` throws descriptive error
 - [ ] API key expiration warning appears when date is within 7 days
-- [ ] Registry is created at `~/.geminirag/registry.json` on first use
+- [ ] Registry is created at `~/.g-ragger/registry.json` on first use
 - [ ] Registry writes are atomic (temp file + rename)
 - [ ] All CRUD operations work correctly
 

@@ -2,7 +2,7 @@
  * Tests for src/services/registry.ts
  * Run: npx tsx test_scripts/test-registry.ts
  *
- * Uses a temporary directory to avoid touching the real ~/.geminirag/registry.json.
+ * Uses a temporary directory to avoid touching the real ~/.g-ragger/registry.json.
  * We override the module-level constants by rewriting the registry paths via
  * a small wrapper that patches the module internals.
  */
@@ -55,7 +55,7 @@ function test(name: string, fn: () => void): void {
 // ========== Setup: temporary registry directory ==========
 
 // The registry module uses module-level constants derived from os.homedir().
-// We cannot easily mock those, so instead we create a temp .geminirag dir and
+// We cannot easily mock those, so instead we create a temp .g-ragger dir and
 // monkey-patch os.homedir() BEFORE importing the registry module.
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'geminirag-test-'));
@@ -68,11 +68,11 @@ const originalHomedir = os.homedir;
 const registry = await import('../src/services/registry.js');
 
 function resetRegistry(): void {
-  const registryPath = path.join(tmpDir, '.geminirag', 'registry.json');
+  const registryPath = path.join(tmpDir, '.g-ragger', 'registry.json');
   if (fs.existsSync(registryPath)) {
     fs.unlinkSync(registryPath);
   }
-  const registryDir = path.join(tmpDir, '.geminirag');
+  const registryDir = path.join(tmpDir, '.g-ragger');
   if (fs.existsSync(registryDir)) {
     fs.rmSync(registryDir, { recursive: true });
   }

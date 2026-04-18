@@ -37,7 +37,7 @@ GeminiRAG/
   src/
     cli.ts                          # Entry point; registers all commands
     config/
-      config.ts                     # Configuration loader (env > .env > ~/.geminirag/config.json)
+      config.ts                     # Configuration loader (env > .env > ~/.g-ragger/config.json)
     types/
       index.ts                      # All interfaces, types, enums
       turndown-plugin-gfm.d.ts      # Type declaration for turndown-plugin-gfm
@@ -51,7 +51,7 @@ GeminiRAG/
       gemini-client.ts              # Factory: creates GoogleGenAI instance from config
       file-search.ts                # Gemini File Search Store CRUD + query
       content-extractor.ts          # Extracts content from file/web/youtube/note
-      registry.ts                   # Local JSON registry at ~/.geminirag/registry.json
+      registry.ts                   # Local JSON registry at ~/.g-ragger/registry.json
     utils/
       validation.ts                 # Input validators (MIME, date, flags, URL, YouTube ID)
       format.ts                     # Terminal table formatters
@@ -90,7 +90,7 @@ Key interfaces relevant to v2:
 
 ### 3.3 `src/config/config.ts` -- Configuration Loading
 
-- **Priority**: env vars > `.env` (dotenv) > `~/.geminirag/config.json`
+- **Priority**: env vars > `.env` (dotenv) > `~/.g-ragger/config.json`
 - **Required**: `GEMINI_API_KEY`, `GEMINI_MODEL` -- throws with detailed instructions if missing (no fallbacks)
 - **Optional**: `GEMINI_API_KEY_EXPIRATION` -- warns if within 7 days
 - **Pattern**: Returns a fully validated `AppConfig` object. All new config fields must follow the same "throw if missing when needed" pattern.
@@ -131,7 +131,7 @@ Four extractor functions, each returning `ExtractedContent`:
 
 ### 3.6 `src/services/registry.ts` -- Local Registry
 
-- Stored at `~/.geminirag/registry.json`
+- Stored at `~/.g-ragger/registry.json`
 - Atomic writes via tmp file + rename
 - Functions: `loadRegistry`, `saveRegistry`, `addWorkspace`, `removeWorkspace`, `getWorkspace`, `listWorkspaces`, `addUpload`, `removeUpload`, `updateUpload`
 - `getWorkspace()` throws `"Workspace '<name>' not found"` if not found -- same error message expected for v2 `get` command

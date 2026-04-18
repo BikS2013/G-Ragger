@@ -22,11 +22,11 @@ GeminiRAG/
   src/
     cli.ts                          # CLI entry point (Commander program)
     types/index.ts                  # All shared interfaces and types
-    config/config.ts                # loadConfig() -- env > .env > ~/.geminirag/config.json
+    config/config.ts                # loadConfig() -- env > .env > ~/.g-ragger/config.json
     services/
       gemini-client.ts              # createGeminiClient(config) -> GoogleGenAI
       file-search.ts                # Gemini File Search operations (CRUD, query, getDocumentContent)
-      registry.ts                   # Local JSON registry CRUD (~/.geminirag/registry.json)
+      registry.ts                   # Local JSON registry CRUD (~/.g-ragger/registry.json)
       content-extractor.ts          # Extract content from files, URLs, YouTube, notes
       notes-generator.ts            # AI-powered note generation
       youtube-data-api.ts           # YouTube Data API integration
@@ -72,10 +72,10 @@ All types are centralized in a single file. Key types for the Electron UI:
 
 | Module | Key Exports | Notes |
 |--------|------------|-------|
-| `services/registry.ts` | `loadRegistry()`, `saveRegistry()`, `addWorkspace()`, `removeWorkspace()`, `getWorkspace()`, `listWorkspaces()`, `addUpload()`, `removeUpload()`, `updateUpload()` | Synchronous. Reads/writes `~/.geminirag/registry.json`. Atomic writes via tmp+rename. |
+| `services/registry.ts` | `loadRegistry()`, `saveRegistry()`, `addWorkspace()`, `removeWorkspace()`, `getWorkspace()`, `listWorkspaces()`, `addUpload()`, `removeUpload()`, `updateUpload()` | Synchronous. Reads/writes `~/.g-ragger/registry.json`. Atomic writes via tmp+rename. |
 | `services/file-search.ts` | `createStore()`, `deleteStore()`, `listStores()`, `uploadContent()`, `deleteDocument()`, `getDocumentContent()`, `query()` | Async. Requires `GoogleGenAI` instance + model name. Handles 503 fallback, polling bugs. |
 | `services/gemini-client.ts` | `createGeminiClient(config)` | Returns `new GoogleGenAI({ apiKey })`. Stateless factory, no caching. |
-| `config/config.ts` | `loadConfig()` | Synchronous. Priority: env vars > .env > `~/.geminirag/config.json`. Throws on missing `GEMINI_API_KEY` or `GEMINI_MODEL`. Warns to stderr on expiring keys. |
+| `config/config.ts` | `loadConfig()` | Synchronous. Priority: env vars > .env > `~/.g-ragger/config.json`. Throws on missing `GEMINI_API_KEY` or `GEMINI_MODEL`. Warns to stderr on expiring keys. |
 
 ### Commands (CLI-specific, not reusable as-is)
 
