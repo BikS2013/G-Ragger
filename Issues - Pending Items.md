@@ -1,10 +1,47 @@
 # GeminiRAG - Issues & Pending Items
 
-**Last Updated**: 2026-04-10
+**Last Updated**: 2026-05-31
 
 ---
 
 ## Pending Items
+
+### Critical (Architecture)
+
+A1. **Partial multi-provider support for AI-generative features** (planned, not yet refined).
+    The Gemini File Search layer (workspaces, indexing, semantic search) is, and will remain,
+    Gemini-only by design — it has no cross-provider equivalent. However, the AI-generative
+    features (YouTube notes generation, AI reports, AI descriptions) SHOULD become pluggable
+    so users can run them against any of the eight standard providers
+    (Direct OpenAI, Direct Anthropic, Direct Gemini, Azure OpenAI, Azure AI Inference / Foundry,
+    Ollama, LiteLLM, MLX-LM). This requires:
+      - A provider abstraction layer (LangChain or equivalent) for the generative side only.
+      - Per-feature provider/model configuration via the four-tier resolution chain.
+      - New canonical env vars under `~/.tool-agents/g-ragger/.env` for the seven additional providers (already reserved in commented form).
+      - Updates to: `src/services/youtube-notes-generator.ts`, the AI report pipeline, and the AI description generator.
+      - Refined request + investigation (if needed) + plan documents under `docs/reference/` and `docs/design/`.
+    Action: dispatch the `request-refiner` subagent on this item before any implementation work, then a `plan-NNN-multi-provider-ai-generative.md`.
+
+### Configuration / Conventions
+
+B1. **Legacy `~/.g-ragger/config.json` fallback in `loadConfig()` is an explicit exception to the no-fallback rule** (`src/config/config.ts`).
+    The official four-tier resolution chain is: shell env → `~/.tool-agents/g-ragger/.env` →
+    local `.env` → CLI overrides. To avoid breaking existing users whose API keys are stored
+    in the legacy `~/.g-ragger/config.json`, `loadConfig()` consults that file as a final,
+    fifth lookup. The file is treated as additional user-provided config (not a hardcoded
+    default), so it does not "substitute a missing config value with a default." This
+    exception is recorded here per the CLAUDE.md rule that "If I ask you to make an exception
+    to the configuration setting rule, you must write this exception in the projects memory
+    file, before you implement it." Future work: deprecate this lookup once existing users
+    migrate to `~/.tool-agents/g-ragger/.env`; emit a one-time deprecation warning when the
+    legacy file is read.
+
+B2. **CLI flag overrides (Tier 4) wired only at the function-call layer.**
+    `loadConfig(overrides)` accepts a `ConfigOverrides` object that the CLI entry point
+    (`src/cli.ts`) can pass in, but no global CLI flags (`--api-key`, `--model`,
+    `--youtube-api-key`) are currently exposed via Commander. Add the global flags and thread
+    them into `loadConfig()` so users can override secrets per-invocation.
+
 
 ### Medium (Electron UI)
 

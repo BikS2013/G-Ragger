@@ -49,8 +49,10 @@ function test(name: string, fn: () => void): void {
 function withCleanEnv(fn: () => void): void {
   const saved: Record<string, string | undefined> = {};
   const keys = [
+    'GOOGLE_API_KEY',
     'GEMINI_API_KEY',
     'GEMINI_MODEL',
+    'GOOGLE_API_KEY_EXPIRATION',
     'GEMINI_API_KEY_EXPIRATION',
   ];
   for (const key of keys) {
@@ -88,10 +90,38 @@ function captureStderr(fn: () => void): string {
 // ========== Tests ==========
 console.log('\n--- loadConfig ---');
 
-test('throws when GEMINI_API_KEY is missing', () => {
+test('throws when GOOGLE_API_KEY / GEMINI_API_KEY is missing', () => {
   withCleanEnv(() => {
     process.env.GEMINI_MODEL = 'gemini-2.5-flash';
-    expectThrow(() => loadConfig(), 'GEMINI_API_KEY is required');
+    expectThrow(() => loadConfig(), 'GOOGLE_API_KEY');
+  });
+});
+
+test('accepts GEMINI_API_KEY as alias for GOOGLE_API_KEY', () => {
+  withCleanEnv(() => {
+    process.env.GEMINI_API_KEY = 'alias-key';
+    process.env.GEMINI_MODEL = 'gemini-2.5-flash';
+    const config = loadConfig();
+    assert(config.geminiApiKey === 'alias-key', 'alias key should resolve');
+  });
+});
+
+test('GOOGLE_API_KEY takes precedence over GEMINI_API_KEY when both are set', () => {
+  withCleanEnv(() => {
+    process.env.GOOGLE_API_KEY = 'canonical';
+    process.env.GEMINI_API_KEY = 'legacy';
+    process.env.GEMINI_MODEL = 'gemini-2.5-flash';
+    const config = loadConfig();
+    assert(config.geminiApiKey === 'canonical', 'canonical should win over alias');
+  });
+});
+
+test('CLI override (Tier 4) wins over env (Tier 1)', () => {
+  withCleanEnv(() => {
+    process.env.GOOGLE_API_KEY = 'from-env';
+    process.env.GEMINI_MODEL = 'gemini-2.5-flash';
+    const config = loadConfig({ GOOGLE_API_KEY: 'from-cli' });
+    assert(config.geminiApiKey === 'from-cli', 'CLI override should win');
   });
 });
 
